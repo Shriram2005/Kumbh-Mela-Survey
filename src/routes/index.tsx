@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
+import { Toaster, toast } from "sonner";
 import { VoiceInput } from "@/components/VoiceInput";
 import {
   LANGUAGES,
@@ -41,40 +42,43 @@ function SurveyPage() {
   const [error, setError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [draftRestored, setDraftRestored] = useState(false);
 
   // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
   const audioBlobsRef = useRef<Record<string, Blob>>({});
 
   // Generate a stable response ID for the entire survey session
-  const responseIdRef = useRef(crypto.randomUUID());
+  const responseIdRef = useRef<string>(crypto.randomUUID());
+  const draftRestoredRef = useRef(false);
 
-  // Restore draft on mount if one exists
+  // Restore draft on mount if one exists — show a brief toast instead of a modal
   useEffect(() => {
     let active = true;
     loadDraft().then((draft) => {
-      if (!active || !draft || !draft.lang) return;
-      setLang((currLang) => {
-        if (currLang !== null) return currLang; // user already picked language
+      if (!active || !draft || !draft.lang || draftRestoredRef.current) return;
+      draftRestoredRef.current = true;
 
-        const restoredAnswers: Answers = { ...draft.answers };
-        if (draft.audioBlobs) {
-          audioBlobsRef.current = { ...draft.audioBlobs };
-          // Re-instantiate local object URLs for audio playback
-          Object.entries(draft.audioBlobs).forEach(([qid, blob]) => {
-            if (restoredAnswers[qid]) {
-              restoredAnswers[qid] = {
-                ...restoredAnswers[qid],
-                audioUrl: URL.createObjectURL(blob),
-              };
-            }
-          });
-        }
-        responseIdRef.current = draft.responseId || crypto.randomUUID();
-        setAnswers(restoredAnswers);
-        setStep(typeof draft.step === "number" ? draft.step : 0);
-        setDraftRestored(true);
-        return draft.lang;
+      const restoredAnswers: Answers = { ...draft.answers };
+      if (draft.audioBlobs) {
+        audioBlobsRef.current = { ...draft.audioBlobs };
+        // Re-instantiate local object URLs for audio playback
+        Object.entries(draft.audioBlobs).forEach(([qid, blob]) => {
+          if (restoredAnswers[qid]) {
+            restoredAnswers[qid] = {
+              ...restoredAnswers[qid],
+              audioUrl: URL.createObjectURL(blob),
+            };
+          }
+        });
+      }
+      responseIdRef.current = draft.responseId || crypto.randomUUID();
+      setAnswers(restoredAnswers);
+      setStep(typeof draft.step === "number" ? draft.step : 0);
+      setLang(draft.lang);
+
+      toast.success("Draft restored", {
+        id: "draft-restored",
+        description: "Resuming where you left off.",
+        duration: 3000,
       });
     });
     return () => {
@@ -133,11 +137,15 @@ function SurveyPage() {
 
         const uploadResults = await Promise.all(uploadPromises);
         for (const { qid, s3Url } of uploadResults) {
-          if (finalAnswers[qid]) {
+          if (finalAnswers[qid] && s3Url) {
             finalAnswers[qid] = {
               ...finalAnswers[qid],
               audioUrl: s3Url,
             };
+          } else if (finalAnswers[qid]) {
+            // Remove blob: URL — don't persist local blob URLs to Firestore
+            const { audioUrl: _blobUrl, ...rest } = finalAnswers[qid] as any;
+            finalAnswers[qid] = rest;
           }
         }
 
@@ -173,7 +181,7 @@ function SurveyPage() {
 
   const restart = () => {
     clearDraft();
-    setDraftRestored(false);
+    draftRestoredRef.current = false;
     Object.values(answers).forEach((a) => {
       if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
         URL.revokeObjectURL(a.audioUrl);
@@ -261,18 +269,6 @@ function SurveyPage() {
           />
         </div>
         <div className="p-5 sm:p-8">
-          {draftRestored && (
-            <div className="mb-4 flex items-center justify-between rounded-lg bg-primary/10 px-3.5 py-2 text-xs text-primary">
-              <span>📋 Resumed saved survey draft</span>
-              <button
-                type="button"
-                onClick={restart}
-                className="font-medium underline hover:opacity-80"
-              >
-                Start over
-              </button>
-            </div>
-          )}
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {t.question} {step + 1} {t.of} {total}
           </p>
@@ -348,8 +344,11 @@ function SurveyPage() {
             )}
           </div>
 
+          {/* Voice input: hidden for choice/rating questions */}
           <VoiceInput
             lang={lang}
+            questionType={question.type}
+            existingText={current.text}
             onTranscript={(text) =>
               update({ text: current.text ? `${current.text} ${text}` : text })
             }
@@ -357,11 +356,16 @@ function SurveyPage() {
             onAudio={(blob, previewUrl) => {
               if (blob && previewUrl) {
                 audioBlobsRef.current[question.id] = blob;
-                update({ audioUrl: previewUrl });
+                // When audio is recorded, clear text for this question
+                update({ text: "", audioUrl: previewUrl });
               } else {
                 delete audioBlobsRef.current[question.id];
                 update({ audioUrl: undefined });
               }
+            }}
+            onRecordStart={() => {
+              // Wipe typed text when user starts audio recording
+              update({ text: "" });
             }}
           />
 
@@ -399,6 +403,18 @@ function SurveyPage() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-muted/40 px-4 py-8 sm:py-14">
+      <Toaster
+        position="bottom-center"
+        toastOptions={{
+          style: {
+            fontSize: "0.8rem",
+            padding: "8px 14px",
+            minHeight: "unset",
+            gap: "8px",
+            borderRadius: "8px",
+          },
+        }}
+      />
       <div className="mx-auto w-full max-w-2xl">{children}</div>
     </main>
   );

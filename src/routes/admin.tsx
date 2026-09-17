@@ -47,24 +47,43 @@ async function exportToExcel(responses: StoredResponse[]) {
     "Submitted At",
     "Language",
     ...QUESTIONS.map((q) => q.label.en),
-    ...QUESTIONS.map((q) => `${q.label.en} [Audio URL]`),
   ];
 
-  const rows = responses.map((r) => [
-    r.id,
-    new Date(r.submittedAt).toLocaleString(),
-    LANG_LABELS[r.lang] ?? r.lang,
-    ...QUESTIONS.map((q) => r.answers[q.id]?.text ?? ""),
-    ...QUESTIONS.map((q) => r.answers[q.id]?.audioUrl ?? ""),
-  ]);
+  const rows = responses.map((r) => {
+    const baseCols = [
+      r.id,
+      new Date(r.submittedAt).toLocaleString(),
+      LANG_LABELS[r.lang] ?? r.lang,
+    ];
+
+    const answerCols = QUESTIONS.map((q) => {
+      const ans = r.answers[q.id];
+      if (!ans) return "";
+      // If legacy response has both text and audio, include both
+      if (ans.audioUrl && ans.text) {
+        return `${ans.text} (Audio: ${ans.audioUrl})`;
+      }
+      // If answered via audio, output the audio file path/URL directly
+      if (ans.audioUrl) {
+        return ans.audioUrl;
+      }
+      // Otherwise output text answer directly
+      return ans.text ?? "";
+    });
+
+    return [...baseCols, ...answerCols];
+  });
 
   const ws = utils.aoa_to_sheet([headers, ...rows]);
 
-  // Auto-fit column widths
+  // Auto-fit column widths (capped at 50 to prevent overflow on long URLs)
   ws["!cols"] = headers.map((h, i) => ({
     wch: Math.max(
       h.length,
-      ...rows.map((r) => String(r[i] ?? "").length),
+      ...rows.map((r) => {
+        const val = String(r[i] ?? "");
+        return Math.min(val.length, 50);
+      }),
     ),
   }));
 
@@ -80,6 +99,7 @@ function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
   const [langFilter, setLangFilter] = useState<Lang | "all">("all");
+  const [audioOnly, setAudioOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -111,37 +131,65 @@ function AdminPage() {
       {} as Record<string, number>,
     );
 
+    const RATING_MAP: Record<string, number> = {
+      "5": 5, "4": 4, "3": 3, "2": 2, "1": 1,
+      "Excellent": 5, "उत्कृष्ट": 5,
+      "Good": 4, "अच्छा": 4, "चांगले": 4,
+      "Average": 3, "औसत": 3, "सरासरी": 3, "Fair": 3, "सामान्य": 3, "साधारण": 3,
+      "Poor": 2, "खराब": 2, "वाईट": 2,
+      "Very Poor": 1, "बहुत खराब": 1, "खूप वाईट": 1,
+    };
+
     const ratings = responses
-      .flatMap((r) =>
-        QUESTIONS.filter((q) => q.type === "rating").map((q) =>
-          parseFloat(r.answers[q.id]?.text ?? ""),
-        ),
-      )
-      .filter((n) => !isNaN(n));
+      .map((r) => {
+        const val = r.answers["experience"]?.text;
+        if (!val) return null;
+        if (RATING_MAP[val] !== undefined) return RATING_MAP[val];
+        const num = parseFloat(val);
+        return isNaN(num) ? null : num;
+      })
+      .filter((n): n is number => n !== null);
 
     const avgRating =
       ratings.length > 0
         ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
         : "—";
 
-    return { byLang, avgRating };
+    let totalAudioRecordings = 0;
+    let withAudioCount = 0;
+    responses.forEach((r) => {
+      const count = Object.values(r.answers).filter((a) => Boolean(a.audioUrl)).length;
+      if (count > 0) {
+        withAudioCount += 1;
+        totalAudioRecordings += count;
+      }
+    });
+
+    return { byLang, avgRating, withAudioCount, totalAudioRecordings };
   }, [responses]);
 
   // Filtered
   const filtered = useMemo(() => {
     return responses.filter((r) => {
       if (langFilter !== "all" && r.lang !== langFilter) return false;
+      if (audioOnly) {
+        const hasAudio = Object.values(r.answers).some((a) => Boolean(a.audioUrl));
+        if (!hasAudio) return false;
+      }
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchId = r.id.toLowerCase().includes(q);
         const matchText = Object.values(r.answers).some(
-          (a) => a.text.toLowerCase().includes(q),
+          (a) => a.text?.toLowerCase().includes(q),
         );
-        return matchId || matchText;
+        const matchAudio =
+          (q === "audio" || q === "voice" || q === "mic") &&
+          Object.values(r.answers).some((a) => Boolean(a.audioUrl));
+        return matchId || matchText || matchAudio;
       }
       return true;
     });
-  }, [responses, search, langFilter]);
+  }, [responses, search, langFilter, audioOnly]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -199,6 +247,19 @@ function AdminPage() {
             accent="blue"
           />
           <StatCard
+            icon={<Mic className="stat-icon-svg" />}
+            label="Voice Responses"
+            value={
+              <span>
+                {stats.withAudioCount}{" "}
+                <span style={{ fontSize: "0.78rem", fontWeight: 400, opacity: 0.75 }}>
+                  ({stats.totalAudioRecordings} clips)
+                </span>
+              </span>
+            }
+            accent="purple"
+          />
+          <StatCard
             icon={<Star className="stat-icon-svg" />}
             label="Avg. Rating"
             value={stats.avgRating}
@@ -228,7 +289,7 @@ function AdminPage() {
             <Search className="admin-search-icon" />
             <input
               type="search"
-              placeholder="Search by name, state, or keyword…"
+              placeholder="Search by name, state, keyword, or 'audio'…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -245,6 +306,15 @@ function AdminPage() {
                 {l === "all" ? "All" : LANG_LABELS[l]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setAudioOnly((prev) => !prev)}
+              className={`admin-lang-btn ${audioOnly ? "active" : ""}`}
+              title="Filter responses with audio recordings"
+            >
+              <Mic className="h-3 w-3 inline mr-1" />
+              With Audio ({stats.withAudioCount})
+            </button>
           </div>
         </section>
 
@@ -272,7 +342,7 @@ function AdminPage() {
         {loading ? (
           <LoadingSkeleton />
         ) : filtered.length === 0 ? (
-          <EmptyState hasFilter={search !== "" || langFilter !== "all"} />
+          <EmptyState hasFilter={search !== "" || langFilter !== "all" || audioOnly} />
         ) : (
           <div className="admin-response-list">
             {filtered.map((r) => (
@@ -300,7 +370,7 @@ function StatCard({
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
-  accent: "blue" | "amber" | "green";
+  accent: "blue" | "amber" | "green" | "purple";
 }) {
   return (
     <div className={`stat-card stat-card-${accent}`}>
@@ -323,10 +393,16 @@ function ResponseCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const nameAnswer = response.answers["name"]?.text;
-  const stateAnswer = response.answers["state"]?.text;
+  const nameObj = response.answers["name"];
+  const nameText = nameObj?.text?.trim();
+  const nameAudio = nameObj?.audioUrl;
+
+  const stateObj = response.answers["state"];
+  const stateText = stateObj?.text?.trim();
+  const stateAudio = stateObj?.audioUrl;
+
   const expRating = response.answers["experience"]?.text;
-  const audioCount = Object.values(response.answers).filter((a) => a.audioUrl).length;
+  const audioCount = Object.values(response.answers).filter((a) => Boolean(a.audioUrl)).length;
 
   return (
     <div className={`response-card ${expanded ? "response-card-expanded" : ""}`}>
@@ -334,14 +410,29 @@ function ResponseCard({
       <button type="button" className="response-card-header" onClick={onToggle}>
         <div className="response-card-meta">
           <div className="response-card-name-row">
-            <span className="response-card-name">{nameAnswer || "Anonymous"}</span>
-            {stateAnswer && <span className="response-card-state">{stateAnswer}</span>}
+            {nameText ? (
+              <span className="response-card-name">{nameText}</span>
+            ) : nameAudio ? (
+              <span className="response-card-name flex items-center gap-1.5 text-primary">
+                <Mic className="h-3.5 w-3.5" /> Audio Name
+              </span>
+            ) : (
+              <span className="response-card-name text-muted-foreground italic">Anonymous</span>
+            )}
+
+            {stateText ? (
+              <span className="response-card-state">{stateText}</span>
+            ) : stateAudio ? (
+              <span className="response-card-state flex items-center gap-1 text-primary">
+                <Mic className="h-3 w-3" /> Audio State
+              </span>
+            ) : null}
           </div>
           <div className="response-card-sub">
             <span className="response-lang-pill">{LANG_LABELS[response.lang]}</span>
             {expRating && (
               <span className="response-rating">
-                <Star className="h-3 w-3" /> {expRating}/5
+                <Star className="h-3 w-3" /> {!isNaN(Number(expRating)) ? `${expRating}/5` : expRating}
               </span>
             )}
             {audioCount > 0 && (
@@ -368,29 +459,48 @@ function ResponseCard({
           <dl className="response-answer-grid">
             {QUESTIONS.map((q) => {
               const a = response.answers[q.id];
-              if (!a && !a?.audioUrl) return null;
+              const hasText = Boolean(a?.text?.trim());
+              const hasAudio = Boolean(a?.audioUrl);
+
+              if (!a && !hasAudio) return null;
+
               return (
                 <div key={q.id} className="answer-item">
-                  <dt className="answer-question">{q.label.en}</dt>
+                  <div className="answer-header-row">
+                    <dt className="answer-question">{q.label.en}</dt>
+                    {hasAudio ? (
+                      <span className="answer-type-tag answer-type-audio flex items-center gap-1">
+                        <Mic className="h-2.5 w-2.5" /> Audio
+                      </span>
+                    ) : q.type === "choice" ? (
+                      <span className="answer-type-tag answer-type-choice">Option</span>
+                    ) : null}
+                  </div>
                   <dd className="answer-body">
-                    {a?.text ? (
-                      <span className="answer-text">{a.text}</span>
-                    ) : (
-                      <span className="answer-empty">—</span>
+                    {/* Render text if present */}
+                    {hasText && (
+                      <span className="answer-text">{a!.text}</span>
                     )}
-                    {a?.audioUrl && (
+
+                    {/* Render audio player if audio was submitted */}
+                    {hasAudio && (
                       <div className="answer-audio-row">
-                        <audio controls src={a.audioUrl} className="answer-audio-player" />
+                        <audio controls src={a!.audioUrl} className="answer-audio-player" />
                         <a
-                          href={a.audioUrl}
+                          href={a!.audioUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="answer-audio-link"
-                          title="Open audio URL"
+                          title="Open audio file in new tab"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </div>
+                    )}
+
+                    {/* Only show '—' if neither text nor audio is present */}
+                    {!hasText && !hasAudio && (
+                      <span className="answer-empty">—</span>
                     )}
                   </dd>
                 </div>

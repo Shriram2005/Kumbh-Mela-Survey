@@ -96,12 +96,6 @@ export const UI = {
   },
 };
 
-const yesNo: Record<Lang, string[]> = {
-  en: ["Yes", "No", "Partly"],
-  hi: ["हाँ", "नहीं", "आंशिक रूप से"],
-  mr: ["होय", "नाही", "अंशतः"],
-};
-
 export const QUESTIONS: Question[] = [
   {
     id: "name",
@@ -123,11 +117,16 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "experience",
-    type: "rating",
+    type: "choice",
     label: {
-      en: "Rate your overall experience at Kumbh Mela",
-      hi: "कुंभ मेले में अपने समग्र अनुभव को रेट करें",
-      mr: "कुंभमेळ्यातील तुमच्या एकूण अनुभवाला गुण द्या",
+      en: "Rate your overall experience at Kumbh Mela:",
+      hi: "कुंभ मेले में अपने समग्र अनुभव को रेट करें:",
+      mr: "कुंभमेळ्यातील तुमच्या एकूण अनुभवाला गुण द्या:",
+    },
+    options: {
+      en: ["Excellent", "Good", "Average", "Poor", "Very Poor"],
+      hi: ["उत्कृष्ट", "अच्छा", "औसत", "खराब", "बहुत खराब"],
+      mr: ["उत्कृष्ट", "चांगले", "सरासरी", "वाईट", "खूप वाईट"],
     },
   },
   {
@@ -139,9 +138,9 @@ export const QUESTIONS: Question[] = [
       mr: "सहभागी होण्याचे तुमचे मुख्य कारण काय होते?",
     },
     options: {
-      en: ["Religious / spiritual", "Family tradition", "Tourism", "Work / duty", "Other"],
-      hi: ["धार्मिक / आध्यात्मिक", "पारिवारिक परंपरा", "पर्यटन", "कार्य / ड्यूटी", "अन्य"],
-      mr: ["धार्मिक / आध्यात्मिक", "कौटुंबिक परंपरा", "पर्यटन", "काम / कर्तव्य", "इतर"],
+      en: ["Spiritual", "Cultural", "Photography", "Academic", "Other"],
+      hi: ["आध्यात्मिक", "सांस्कृतिक", "फ़ोटोग्राफ़ी", "शैक्षणिक", "अन्य"],
+      mr: ["आध्यात्मिक", "सांस्कृतिक", "छायाचित्रण (फोटोग्राफी)", "शैक्षणिक", "इतर"],
     },
   },
   {
@@ -153,18 +152,23 @@ export const QUESTIONS: Question[] = [
       mr: "तुमचा प्रवासाचा मार्ग कोणता होता?",
     },
     options: {
-      en: ["Train", "Bus", "Car / taxi", "Two-wheeler", "On foot", "Other"],
-      hi: ["ट्रेन", "बस", "कार / टैक्सी", "दोपहिया", "पैदल", "अन्य"],
-      mr: ["रेल्वे", "बस", "कार / टॅक्सी", "दुचाकी", "पायी", "इतर"],
+      en: ["Air", "Railway", "Road", "Public Transport", "Own Vehicle"],
+      hi: ["हवाई यात्रा", "रेलवे", "सड़क मार्ग", "सार्वजनिक परिवहन", "निजी वाहन"],
+      mr: ["विमान", "रेल्वे", "रस्ता मार्ग", "सार्वजनिक वाहतूक", "स्वतःचे वाहन"],
     },
   },
   {
     id: "accommodation",
-    type: "rating",
+    type: "choice",
     label: {
       en: "How satisfied were you with accommodation and sanitation?",
       hi: "आवास और स्वच्छता से आप कितने संतुष्ट थे?",
       mr: "निवास व स्वच्छतेबाबत तुम्ही किती समाधानी होता?",
+    },
+    options: {
+      en: ["Very Satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very Dissatisfied"],
+      hi: ["बहुत संतुष्ट", "संतुष्ट", "तटस्थ", "असंतोषजनक", "बहुत असंतुष्ट"],
+      mr: ["खूप समाधानी", "समाधानी", "तटस्थ", "असमाधानी", "खूप असमाधानी"],
     },
   },
   {
@@ -175,25 +179,33 @@ export const QUESTIONS: Question[] = [
       hi: "क्या आपने कुंभ मेले में सुरक्षित महसूस किया?",
       mr: "कुंभमेळ्यात तुम्हाला सुरक्षित वाटले का?",
     },
-    options: yesNo,
+    options: {
+      en: ["Yes, completely", "Mostly", "Somewhat", "No", "Not sure"],
+      hi: ["हाँ, पूरी तरह से", "अधिकांशतः", "कुछ हद तक", "नहीं", "निश्चित नहीं"],
+      mr: ["होय, पूर्णपणे", "बहुतांश", "काही प्रमाणात", "नाही", "निश्चित नाही"],
+    },
   },
   {
     id: "medical_adequate",
     type: "choice",
     label: {
-      en: "Were the medical / emergency facilities adequate?",
-      hi: "क्या चिकित्सा / आपातकालीन सुविधाएँ पर्याप्त थीं?",
-      mr: "वैद्यकीय / आपत्कालीन सुविधा पुरेशा होत्या का?",
+      en: "Were the medical/emergency facilities adequate?",
+      hi: "क्या चिकित्सा/आपातकालीन सुविधाएँ पर्याप्त थीं?",
+      mr: "वैद्यकीय/आपत्कालीन सुविधा पुरेशा होत्या का?",
     },
-    options: yesNo,
+    options: {
+      en: ["Very Adequate", "Adequate", "Neutral", "Inadequate", "Very Inadequate"],
+      hi: ["अत्यंत पर्याप्त", "पर्याप्त", "तटस्थ", "अपर्याप्त", "बहुत अपर्याप्त"],
+      mr: ["अतिशय पुरेसे", "पुरेसे", "तटस्थ", "अपुरे", "खूप अपुरे"],
+    },
   },
   {
     id: "medical_needed",
     type: "choice",
     label: {
-      en: "Did anyone in your group need medical help?",
-      hi: "क्या आपके समूह में किसी को चिकित्सा सहायता की आवश्यकता पड़ी?",
-      mr: "तुमच्या गटातील कोणाला वैद्यकीय मदतीची गरज पडली का?",
+      en: "Did anyone in your group need medical help? (If yes, please specify)",
+      hi: "क्या आपके समूह में किसी को चिकित्सा सहायता की आवश्यकता पड़ी? (यदि हाँ, तो कृपया उल्लेख करें)",
+      mr: "तुमच्या गटातील कोणाला वैद्यकीय मदतीची गरज पडली का? (होय असल्यास, कृपया नमूद करा)",
     },
     options: {
       en: ["Yes", "No"],
@@ -203,11 +215,16 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "crowd",
-    type: "rating",
+    type: "choice",
     label: {
-      en: "Rate crowd management",
-      hi: "भीड़ प्रबंधन को रेट करें",
-      mr: "गर्दी व्यवस्थापनाला गुण द्या",
+      en: "Rate crowd management:",
+      hi: "भीड़ प्रबंधन को रेट करें:",
+      mr: "गर्दी व्यवस्थापनाला गुण द्या:",
+    },
+    options: {
+      en: ["Excellent", "Good", "Fair", "Poor", "Very Poor"],
+      hi: ["उत्कृष्ट", "अच्छा", "सामान्य", "खराब", "बहुत खराब"],
+      mr: ["उत्कृष्ट", "चांगले", "साधारण", "वाईट", "खूप वाईट"],
     },
   },
   {
@@ -227,7 +244,11 @@ export const QUESTIONS: Question[] = [
       hi: "क्या परिवहन सेवाएँ पर्याप्त थीं?",
       mr: "वाहतूक सेवा पुरेशा होत्या का?",
     },
-    options: yesNo,
+    options: {
+      en: ["Very Adequate", "Adequate", "Neutral", "Inadequate", "Very Inadequate"],
+      hi: ["अत्यंत पर्याप्त", "पर्याप्त", "तटस्थ", "अपर्याप्त", "बहुत अपर्याप्त"],
+      mr: ["अतिशय पुरेसे", "पुरेसे", "तटस्थ", "अपुरे", "खूप अपुरे"],
+    },
   },
   {
     id: "information",
@@ -237,24 +258,38 @@ export const QUESTIONS: Question[] = [
       hi: "क्या सूचना सेवाएँ सहायक थीं?",
       mr: "माहिती सेवा उपयुक्त होत्या का?",
     },
-    options: yesNo,
+    options: {
+      en: ["Very Helpful", "Somewhat Helpful", "Not Helpful", "Did not use"],
+      hi: ["बहुत सहायक", "कुछ हद तक सहायक", "सहायक नहीं", "उपयोग नहीं किया"],
+      mr: ["खूप उपयुक्त", "काही प्रमाणात उपयुक्त", "उपयुक्त नाही", "वापर केला नाही"],
+    },
   },
   {
     id: "spiritual",
-    type: "rating",
+    type: "choice",
     label: {
-      en: "Was the spiritual / cultural aspect fulfilling?",
-      hi: "क्या आध्यात्मिक / सांस्कृतिक पक्ष संतोषजनक रहा?",
-      mr: "आध्यात्मिक / सांस्कृतिक अनुभव समाधानकारक होता का?",
+      en: "Was the spiritual/cultural aspect fulfilling?",
+      hi: "क्या आध्यात्मिक/सांस्कृतिक पक्ष संतोषजनक रहा?",
+      mr: "आध्यात्मिक/सांस्कृतिक अनुभव समाधानकारक होता का?",
+    },
+    options: {
+      en: ["Extremely", "Mostly", "Neutral", "Not very", "Not at all"],
+      hi: ["अत्यंत", "अधिकांशतः", "तटस्थ", "खास नहीं", "बिल्कुल नहीं"],
+      mr: ["अत्यंत", "बहुतांश", "तटस्थ", "फारसे नाही", "मुळीच नाही"],
     },
   },
   {
     id: "challenges",
-    type: "longtext",
+    type: "choice",
     label: {
       en: "What challenges did you face?",
       hi: "आपको किन कठिनाइयों का सामना करना पड़ा?",
       mr: "तुम्हाला कोणत्या अडचणी आल्या?",
+    },
+    options: {
+      en: ["Accommodation", "Sanitation", "Health", "Information", "Overcrowding", "Other"],
+      hi: ["आवास", "स्वच्छता", "स्वास्थ्य", "सूचना", "अत्यधिक भीड़", "अन्य"],
+      mr: ["निवास", "स्वच्छता", "आरोग्य", "माहिती", "अतिगर्दी", "इतर"],
     },
   },
   {
@@ -265,15 +300,19 @@ export const QUESTIONS: Question[] = [
       hi: "क्या आपको निरंतर बिजली और इंटरनेट मिला?",
       mr: "तुम्हाला सतत वीज व इंटरनेट मिळाले का?",
     },
-    options: yesNo,
+    options: {
+      en: ["Yes", "No"],
+      hi: ["हाँ", "नहीं"],
+      mr: ["होय", "नाही"],
+    },
   },
   {
     id: "suggestions",
     type: "longtext",
     label: {
-      en: "Suggestions to improve medical / emergency facilities?",
-      hi: "चिकित्सा / आपातकालीन सुविधाओं को बेहतर बनाने के सुझाव?",
-      mr: "वैद्यकीय / आपत्कालीन सुविधा सुधारण्यासाठी सूचना?",
+      en: "Suggestions to improve medical/emergency facilities?",
+      hi: "चिकित्सा/आपातकालीन सुविधाओं को बेहतर बनाने के सुझाव?",
+      mr: "वैद्यकीय/आपत्कालीन सुविधा सुधारण्यासाठी सूचना?",
     },
   },
 ];

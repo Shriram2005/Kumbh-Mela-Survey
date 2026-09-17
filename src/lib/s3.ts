@@ -4,9 +4,9 @@ let clientInstance: S3Client | null = null;
 
 function getS3Client(): S3Client {
   if (!clientInstance) {
-    const region = import.meta.env.VITE_AWS_REGION || "ap-south-1";
-    const accessKeyId = import.meta.env.VITE_AWS_ACCESS_KEY_ID;
-    const secretAccessKey = import.meta.env.VITE_AWS_SECRET_ACCESS_KEY;
+    const region = import.meta.env["VITE_AWS_REGION"] || "ap-south-1";
+    const accessKeyId = import.meta.env["VITE_AWS_ACCESS_KEY_ID"];
+    const secretAccessKey = import.meta.env["VITE_AWS_SECRET_ACCESS_KEY"];
 
     if (!accessKeyId || !secretAccessKey) {
       throw new Error(
@@ -30,11 +30,17 @@ function getS3Client(): S3Client {
  * The S3 bucket must have CORS configured for browser uploads.
  */
 export async function uploadAudioToS3(blob: Blob, responseId: string, questionId: string): Promise<string> {
-  const bucket = import.meta.env.VITE_AWS_S3_BUCKET;
-  const region = import.meta.env.VITE_AWS_REGION || "ap-south-1";
+  const bucket =
+    import.meta.env["VITE_AWS_S3_BUCKET"] ||
+    import.meta.env["VITE_AWS_S3_BUCKET_NAME"];
+  const region = import.meta.env["VITE_AWS_REGION"] || "ap-south-1";
 
-  if (!bucket) {
-    throw new Error("VITE_AWS_S3_BUCKET is not configured in .env.");
+  if (!bucket || bucket === "YOUR_S3_BUCKET_NAME" || bucket === "YOUR_BUCKET_NAME") {
+    throw new Error(
+      "AWS S3 bucket name is not configured properly in .env (currently set to '" +
+        bucket +
+        "'). Please set VITE_AWS_S3_BUCKET in your .env file."
+    );
   }
 
   const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "mp4" : "webm";

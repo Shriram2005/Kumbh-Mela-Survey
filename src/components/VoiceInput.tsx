@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Play, Trash2 } from "lucide-react";
-import type { Lang } from "@/lib/survey";
+import type { Lang, QuestionType } from "@/lib/survey";
 import { LANGUAGES, UI } from "@/lib/survey";
 
 interface Props {
   lang: Lang;
+  questionType: QuestionType;
+  /** Existing text typed by the user (used to warn before discarding). */
+  existingText?: string;
   onTranscript: (text: string) => void;
   audioUrl?: string | undefined;
   onAudio: (blob: Blob | undefined, previewUrl: string | undefined) => void;
+  /** Called when recording starts so parent can wipe text answer. */
+  onRecordStart?: () => void;
 }
 
 /**
@@ -54,7 +59,15 @@ function getOptimalRecorderOptions(): MediaRecorderOptions {
   return options;
 }
 
-export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
+export function VoiceInput({
+  lang,
+  questionType,
+  existingText,
+  onTranscript,
+  audioUrl,
+  onAudio,
+  onRecordStart,
+}: Props) {
   const t = UI[lang];
   const [listening, setListening] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -64,6 +77,9 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
   const recognitionRef = useRef<any>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+
+  // Voice input is only relevant for free-text questions, not choices/ratings
+  const showVoiceControls = questionType === "text" || questionType === "longtext";
 
   useEffect(() => {
     // Only show Voice Typing button if the platform genuinely supports it (hidden on iOS/Safari)
@@ -85,6 +101,7 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
     return () => window.clearInterval(timer);
   }, [recording]);
 
+  if (!showVoiceControls) return null;
 
   const toggleDictation = () => {
     if (listening) {
@@ -121,6 +138,21 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
       recorderRef.current?.stop();
       return;
     }
+
+    // Warn user if there is existing text that will be discarded
+    if (existingText?.trim()) {
+      const ok = window.confirm(
+        lang === "hi"
+          ? "टाइप किया हुआ टेक्स्ट हटा दिया जाएगा। क्या जारी रखें?"
+          : lang === "mr"
+          ? "टाइप केलेला मजकूर हटवला जाईल. सुरू ठेवायचे का?"
+          : "Typed text will be discarded. Continue with audio recording?"
+      );
+      if (!ok) return;
+      // Notify parent to wipe text
+      onRecordStart?.();
+    }
+
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setNotice(t.noMic);
       return;
