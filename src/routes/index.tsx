@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
 import { VoiceInput } from "@/components/VoiceInput";
 import {
   LANGUAGES,
@@ -10,6 +10,8 @@ import {
   type Answers,
   type Lang,
 } from "@/lib/survey";
+import { uploadAudioToS3 } from "@/lib/s3";
+import { saveDraft, loadDraft, clearDraft } from "@/lib/draft";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,8 +37,63 @@ function SurveyPage() {
   const [lang, setLang] = useState<Lang | null>(null);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
+
   const [error, setError] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
+  const audioBlobsRef = useRef<Record<string, Blob>>({});
+
+  // Generate a stable response ID for the entire survey session
+  const responseIdRef = useRef(crypto.randomUUID());
+
+  // Restore draft on mount if one exists
+  useEffect(() => {
+    let active = true;
+    loadDraft().then((draft) => {
+      if (!active || !draft || !draft.lang) return;
+      setLang((currLang) => {
+        if (currLang !== null) return currLang; // user already picked language
+
+        const restoredAnswers: Answers = { ...draft.answers };
+        if (draft.audioBlobs) {
+          audioBlobsRef.current = { ...draft.audioBlobs };
+          // Re-instantiate local object URLs for audio playback
+          Object.entries(draft.audioBlobs).forEach(([qid, blob]) => {
+            if (restoredAnswers[qid]) {
+              restoredAnswers[qid] = {
+                ...restoredAnswers[qid],
+                audioUrl: URL.createObjectURL(blob),
+              };
+            }
+          });
+        }
+        responseIdRef.current = draft.responseId || crypto.randomUUID();
+        setAnswers(restoredAnswers);
+        setStep(typeof draft.step === "number" ? draft.step : 0);
+        setDraftRestored(true);
+        return draft.lang;
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Auto-save draft whenever answers, step, or language updates
+  useEffect(() => {
+    if (!lang || submitted) return;
+    saveDraft({
+      lang,
+      step,
+      responseId: responseIdRef.current,
+      answers,
+      audioBlobs: audioBlobsRef.current,
+      updatedAt: Date.now(),
+    });
+  }, [lang, step, answers, submitted]);
 
   const t = UI[lang ?? "en"];
   const total = QUESTIONS.length;
@@ -52,19 +109,62 @@ function SurveyPage() {
     setError(false);
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     if (!current.text.trim() && !current.audioUrl) {
       setError(true);
       return;
     }
     if (step === total - 1) {
-      saveResponse({
-        id: crypto.randomUUID(),
-        lang: lang ?? "en",
-        submittedAt: new Date().toISOString(),
-        answers,
-      });
-      setSubmitted(true);
+      setSubmitting(true);
+      try {
+        // Upload only the final, confirmed audio recordings to AWS S3
+        const finalAnswers: Answers = { ...answers };
+        const uploadPromises = Object.entries(audioBlobsRef.current).map(
+          async ([qid, blob]) => {
+            try {
+              const s3Url = await uploadAudioToS3(blob, responseIdRef.current, qid);
+              return { qid, s3Url };
+            } catch (err) {
+              console.error(`Failed to upload audio for question ${qid} to S3:`, err);
+              return { qid, s3Url: undefined };
+            }
+          },
+        );
+
+        const uploadResults = await Promise.all(uploadPromises);
+        for (const { qid, s3Url } of uploadResults) {
+          if (finalAnswers[qid]) {
+            finalAnswers[qid] = {
+              ...finalAnswers[qid],
+              audioUrl: s3Url,
+            };
+          }
+        }
+
+        await saveResponse({
+          id: responseIdRef.current,
+          lang: lang ?? "en",
+          submittedAt: new Date().toISOString(),
+          answers: finalAnswers,
+        });
+
+        // Clear saved draft from device storage
+        await clearDraft();
+
+        // Clean up memory blob URLs
+        Object.values(answers).forEach((a) => {
+          if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(a.audioUrl);
+          }
+        });
+        audioBlobsRef.current = {};
+
+        setSubmitted(true);
+      } catch (err) {
+        console.error("Submit error:", err);
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
     setStep((s) => s + 1);
@@ -72,11 +172,21 @@ function SurveyPage() {
   };
 
   const restart = () => {
+    clearDraft();
+    setDraftRestored(false);
+    Object.values(answers).forEach((a) => {
+      if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(a.audioUrl);
+      }
+    });
+    audioBlobsRef.current = {};
     setAnswers({});
     setStep(0);
     setSubmitted(false);
     setLang(null);
+    responseIdRef.current = crypto.randomUUID();
   };
+
 
   if (!lang) {
     return (
@@ -151,6 +261,18 @@ function SurveyPage() {
           />
         </div>
         <div className="p-5 sm:p-8">
+          {draftRestored && (
+            <div className="mb-4 flex items-center justify-between rounded-lg bg-primary/10 px-3.5 py-2 text-xs text-primary">
+              <span>📋 Resumed saved survey draft</span>
+              <button
+                type="button"
+                onClick={restart}
+                className="font-medium underline hover:opacity-80"
+              >
+                Start over
+              </button>
+            </div>
+          )}
           <p className="text-xs uppercase tracking-wide text-muted-foreground">
             {t.question} {step + 1} {t.of} {total}
           </p>
@@ -232,7 +354,15 @@ function SurveyPage() {
               update({ text: current.text ? `${current.text} ${text}` : text })
             }
             audioUrl={current.audioUrl}
-            onAudio={(url) => update({ audioUrl: url })}
+            onAudio={(blob, previewUrl) => {
+              if (blob && previewUrl) {
+                audioBlobsRef.current[question.id] = blob;
+                update({ audioUrl: previewUrl });
+              } else {
+                delete audioBlobsRef.current[question.id];
+                update({ audioUrl: undefined });
+              }
+            }}
           />
 
           {error && <p className="mt-4 text-sm text-destructive">{t.required}</p>}
@@ -250,8 +380,10 @@ function SurveyPage() {
             <button
               type="button"
               onClick={goNext}
-              className="inline-flex items-center gap-1 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              disabled={submitting}
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
             >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {step === total - 1 ? t.submit : t.next}
             </button>
           </div>

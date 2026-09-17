@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, Square, Play, Trash2 } from "lucide-react";
+import { Mic, Play, Trash2 } from "lucide-react";
 import type { Lang } from "@/lib/survey";
 import { LANGUAGES, UI } from "@/lib/survey";
 
@@ -7,7 +7,51 @@ interface Props {
   lang: Lang;
   onTranscript: (text: string) => void;
   audioUrl?: string | undefined;
-  onAudio: (url: string | undefined) => void;
+  onAudio: (blob: Blob | undefined, previewUrl: string | undefined) => void;
+}
+
+/**
+ * Detects whether SpeechRecognition is reliably supported.
+ * On iOS / Safari, Web Speech API is absent or restricted, so we return false.
+ */
+function checkSpeechRecognitionSupport(): boolean {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const isIOS =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (isIOS) return false;
+
+  return Boolean(
+    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  );
+}
+
+/**
+ * Returns audio constraints and options for high-quality voice compression (~32kbps mono).
+ */
+function getOptimalRecorderOptions(): MediaRecorderOptions {
+  const types = [
+    "audio/webm;codecs=opus",
+    "audio/ogg;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+  ];
+  let chosenMime = "";
+  for (const type of types) {
+    if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) {
+      chosenMime = type;
+      break;
+    }
+  }
+
+  const options: MediaRecorderOptions = {
+    audioBitsPerSecond: 32000, // 32kbps mono: ~240KB per minute (70-80% smaller)
+  };
+  if (chosenMime) {
+    options.mimeType = chosenMime;
+  }
+  return options;
 }
 
 export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
@@ -16,9 +60,15 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
   const [recording, setRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
+  const [speechSupported, setSpeechSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+
+  useEffect(() => {
+    // Only show Voice Typing button if the platform genuinely supports it (hidden on iOS/Safari)
+    setSpeechSupported(checkSpeechRecognitionSupport());
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -34,6 +84,7 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [recording]);
+
 
   const toggleDictation = () => {
     if (listening) {
@@ -75,16 +126,36 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Request mono voice-optimized audio stream (cuts uncompressed data by half)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1, // Mono
+          sampleRate: 24000, // 24kHz voice profile
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      // Apply 32kbps compressed Opus / AAC encoding
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, getOptimalRecorderOptions());
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
+
       chunksRef.current = [];
       recorder.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
-        onAudio(URL.createObjectURL(blob));
         stream.getTracks().forEach((track) => track.stop());
         setRecording(false);
         setRecordingSeconds(0);
+
+        // Keep compressed audio locally in-memory — zero uploads to AWS until final submit
+        const localPreviewUrl = URL.createObjectURL(blob);
+        onAudio(blob, localPreviewUrl);
       };
       recorderRef.current = recorder;
       setNotice(null);
@@ -96,21 +167,31 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
     }
   };
 
+  const handleDelete = () => {
+    if (audioUrl && audioUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    onAudio(undefined, undefined);
+  };
+
   return (
     <div className="mt-4 space-y-3">
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={toggleDictation}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-            listening
-              ? "border-destructive bg-destructive/10 text-destructive"
-              : "border-border bg-card text-foreground hover:bg-accent"
-          }`}
-        >
-          <Mic className="h-4 w-4" />
-          {listening ? t.listening : t.voiceType}
-        </button>
+        {/* Hidden on iOS / Safari / unsupported devices to prevent broken UX */}
+        {speechSupported && (
+          <button
+            type="button"
+            onClick={toggleDictation}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
+              listening
+                ? "border-destructive bg-destructive/10 text-destructive"
+                : "border-border bg-card text-foreground hover:bg-accent"
+            }`}
+          >
+            <Mic className="h-4 w-4" />
+            {listening ? t.listening : t.voiceType}
+          </button>
+        )}
 
         <button
           type="button"
@@ -147,7 +228,7 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
           <audio controls src={audioUrl} className="h-9 w-full max-w-xs" />
           <button
             type="button"
-            onClick={() => onAudio(undefined)}
+            onClick={handleDelete}
             className="text-muted-foreground transition-colors hover:text-destructive"
             aria-label="Delete recording"
           >
@@ -160,3 +241,5 @@ export function VoiceInput({ lang, onTranscript, audioUrl, onAudio }: Props) {
     </div>
   );
 }
+
+

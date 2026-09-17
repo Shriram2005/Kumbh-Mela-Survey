@@ -294,7 +294,9 @@ export interface StoredResponse {
 
 const KEY = "kumbh-survey-responses";
 
-export function loadResponses(): StoredResponse[] {
+// ─── localStorage helpers (fallback) ────────────────────────────────────────
+
+function loadLocal(): StoredResponse[] {
   if (typeof window === "undefined") return [];
   try {
     return JSON.parse(window.localStorage.getItem(KEY) ?? "[]") as StoredResponse[];
@@ -303,9 +305,64 @@ export function loadResponses(): StoredResponse[] {
   }
 }
 
-export function saveResponse(res: StoredResponse) {
+function saveLocal(res: StoredResponse) {
   if (typeof window === "undefined") return;
-  const all = loadResponses();
+  const all = loadLocal();
   all.unshift(res);
   window.localStorage.setItem(KEY, JSON.stringify(all.slice(0, 200)));
+}
+
+// ─── Firestore ───────────────────────────────────────────────────────────────
+
+/**
+ * Strips undefined properties recursively so Firestore does not reject the document.
+ */
+function sanitizeForFirestore<T>(data: T): T {
+  return JSON.parse(JSON.stringify(data));
+}
+
+/**
+ * Save a survey response to Firestore.
+ * Also persists to localStorage as offline cache/fallback.
+ */
+export async function saveResponse(res: StoredResponse): Promise<void> {
+  // Always persist locally as cache/fallback
+  saveLocal(res);
+
+  try {
+    const { db } = await import("@/lib/firebase");
+    const { doc, setDoc } = await import("firebase/firestore");
+    const cleanData = sanitizeForFirestore(res);
+    await setDoc(doc(db, "responses", res.id), cleanData);
+  } catch (err) {
+    console.error("[survey] Firestore save failed, kept in localStorage:", err);
+  }
+}
+
+/**
+ * Load all survey responses from Firestore (ordered newest-first).
+ * Merges any local-only cache so no submitted response is missing.
+ */
+export async function loadResponses(): Promise<StoredResponse[]> {
+  try {
+    const { db } = await import("@/lib/firebase");
+    const { collection, getDocs, orderBy, query } = await import("firebase/firestore");
+    const q = query(collection(db, "responses"), orderBy("submittedAt", "desc"));
+    const snap = await getDocs(q);
+    const firestoreData = snap.docs.map((d) => d.data() as StoredResponse);
+
+    // Merge with any local cache that hasn't synced yet
+    const map = new Map<string, StoredResponse>();
+    firestoreData.forEach((r) => map.set(r.id, r));
+    loadLocal().forEach((r) => {
+      if (!map.has(r.id)) map.set(r.id, r);
+    });
+
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
+    );
+  } catch (err) {
+    console.error("[survey] Firestore load failed, falling back to localStorage:", err);
+    return loadLocal();
+  }
 }
