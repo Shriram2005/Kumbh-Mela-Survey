@@ -19,6 +19,21 @@ import {
   ExternalLink,
   Mic,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -168,6 +183,94 @@ function AdminPage() {
     return { byLang, avgRating, withAudioCount, totalAudioRecordings };
   }, [responses]);
 
+  // Visual Analytics Chart Data
+  const chartData = useMemo(() => {
+    if (responses.length === 0) {
+      return { overTime: [], ratings: [], languages: [], states: [] };
+    }
+
+    // 1. Responses over time
+    const dateMap = new Map<string, number>();
+    const sortedChronological = [...responses].sort(
+      (a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime()
+    );
+
+    sortedChronological.forEach((r) => {
+      const dateStr = new Date(r.submittedAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      dateMap.set(dateStr, (dateMap.get(dateStr) ?? 0) + 1);
+    });
+
+    const overTime = Array.from(dateMap.entries()).map(([date, count]) => ({
+      date,
+      responses: count,
+    }));
+
+    // 2. Rating distribution
+    const RATING_LOOKUP: Record<string, string> = {
+      "5": "5 Stars", "4": "4 Stars", "3": "3 Stars", "2": "2 Stars", "1": "1 Star",
+      "Excellent": "5 Stars", "उत्कृष्ट": "5 Stars",
+      "Good": "4 Stars", "अच्छा": "4 Stars", "चांगले": "4 Stars",
+      "Average": "3 Stars", "औसत": "3 Stars", "सरासरी": "3 Stars", "Fair": "3 Stars", "सामान्य": "3 Stars", "साधारण": "3 Stars",
+      "Poor": "2 Stars", "खराब": "2 Stars", "वाईट": "2 Stars",
+      "Very Poor": "1 Star", "बहुत खराब": "1 Star", "खूप वाईट": "1 Star",
+    };
+
+    const ratingCounts: Record<string, number> = {
+      "5 Stars": 0,
+      "4 Stars": 0,
+      "3 Stars": 0,
+      "2 Stars": 0,
+      "1 Star": 0,
+    };
+
+    responses.forEach((r) => {
+      const val = r.answers["experience"]?.text;
+      if (!val) return;
+      const key = RATING_LOOKUP[val];
+      if (key) {
+        ratingCounts[key] = (ratingCounts[key] ?? 0) + 1;
+      }
+    });
+
+    const ratings = Object.entries(ratingCounts).map(([rating, count]) => ({
+      rating,
+      count,
+    }));
+
+    // 3. Language distribution
+    const langCounts: Record<string, number> = { English: 0, Hindi: 0, Marathi: 0 };
+    responses.forEach((r) => {
+      const label = LANG_LABELS[r.lang] ?? r.lang;
+      langCounts[label] = (langCounts[label] ?? 0) + 1;
+    });
+
+    const languages = [
+      { name: "English", value: langCounts["English"] ?? 0, color: "#3b82f6" },
+      { name: "Hindi", value: langCounts["Hindi"] ?? 0, color: "#8b5cf6" },
+      { name: "Marathi", value: langCounts["Marathi"] ?? 0, color: "#ec4899" },
+    ].filter((l) => l.value > 0);
+
+    // 4. State / Location distribution
+    const stateMap = new Map<string, number>();
+    responses.forEach((r) => {
+      const st = r.answers["state"]?.text?.trim();
+      if (st) {
+        const cleanSt = st.charAt(0).toUpperCase() + st.slice(1);
+        stateMap.set(cleanSt, (stateMap.get(cleanSt) ?? 0) + 1);
+      }
+    });
+
+    const states = Array.from(stateMap.entries())
+      .map(([state, count]) => ({ state, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+
+    return { overTime, ratings, languages, states };
+  }, [responses]);
+
   // Filtered
   const filtered = useMemo(() => {
     return responses.filter((r) => {
@@ -238,7 +341,7 @@ function AdminPage() {
       </header>
 
       <main className="admin-main">
-        {/* ── Stats ──────────────────────────────────────────────────────────── */}
+        {/* ── Stats KPI Cards ────────────────────────────────────────────────── */}
         <section className="admin-stats-grid">
           <StatCard
             icon={<Users className="stat-icon-svg" />}
@@ -282,6 +385,146 @@ function AdminPage() {
             accent="green"
           />
         </section>
+
+        {/* ── Analytics Visualizations ────────────────────────────────────────── */}
+        {!loading && responses.length > 0 && (
+          <section className="space-y-6">
+            {/* Trend Chart: Responses Over Time */}
+            <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">Responses Over Time</h2>
+                  <p className="text-xs text-muted-foreground">Daily submission trends</p>
+                </div>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/10 text-primary">
+                  {responses.length} total
+                </span>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData.overTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorResponses" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--color-card)",
+                        borderColor: "var(--color-border)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                    <Area type="monotone" dataKey="responses" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorResponses)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Split Grid: Ratings & Languages */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Rating Distribution */}
+              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold text-foreground">Rating Breakdown</h2>
+                  <p className="text-xs text-muted-foreground">Overall visitor satisfaction</p>
+                </div>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.ratings} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                      <XAxis dataKey="rating" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          borderColor: "var(--color-border)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#f59e0b" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Language Distribution */}
+              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold text-foreground">Language Distribution</h2>
+                  <p className="text-xs text-muted-foreground">Responses by selected language</p>
+                </div>
+                <div className="h-56 w-full flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData.languages}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {chartData.languages.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          borderColor: "var(--color-border)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        height={36}
+                        formatter={(value) => <span className="text-xs font-medium text-foreground">{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Location / State Insights (if data exists) */}
+            {chartData.states.length > 0 && (
+              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold text-foreground">Top Visitor Locations</h2>
+                  <p className="text-xs text-muted-foreground">Most frequent origins reported by pilgrims</p>
+                </div>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart layout="vertical" data={chartData.states} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
+                      <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <YAxis dataKey="state" type="category" tick={{ fontSize: 12, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={100} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          borderColor: "var(--color-border)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* ── Filters ──────────────────────────────────────────────────────── */}
         <section className="admin-filters">
