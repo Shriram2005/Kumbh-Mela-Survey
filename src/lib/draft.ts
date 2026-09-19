@@ -6,6 +6,7 @@ export interface SurveyDraft {
   responseId: string;
   answers: Answers;
   audioBlobs: Record<string, Blob>;
+  files?: Record<string, File | Blob>;
   updatedAt: number;
 }
 
@@ -46,7 +47,7 @@ export async function saveDraft(draft: SurveyDraft): Promise<void> {
   } catch (err) {
     // Fallback: save metadata & text in localStorage if IndexedDB is blocked
     try {
-      const textOnly = { ...draft, audioBlobs: {} };
+      const textOnly = { ...draft, audioBlobs: {}, files: {} };
       localStorage.setItem("kumbh_survey_draft_text", JSON.stringify(textOnly));
     } catch {}
   }

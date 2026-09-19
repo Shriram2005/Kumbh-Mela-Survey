@@ -18,6 +18,8 @@ import {
   FileSpreadsheet,
   ExternalLink,
   Mic,
+  Paperclip,
+  Film,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -74,16 +76,29 @@ async function exportToExcel(responses: StoredResponse[]) {
     const answerCols = QUESTIONS.map((q) => {
       const ans = r.answers[q.id];
       if (!ans) return "";
-      // If legacy response has both text and audio, include both
-      if (ans.audioUrl && ans.text) {
-        return `${ans.text} (Audio: ${ans.audioUrl})`;
+
+      const text = (ans.text || ans.choice || "")?.trim();
+      const hasAudio = Boolean(ans.audioUrl);
+      const hasFile = Boolean(ans.fileUrl);
+
+      // Only file, no text and no audio
+      if (hasFile && !text && !hasAudio) {
+        return ans.fileUrl!;
       }
-      // If answered via audio, output the audio file path/URL directly
-      if (ans.audioUrl) {
-        return ans.audioUrl;
+      // Only audio, no text and no file
+      if (hasAudio && !text && !hasFile) {
+        return ans.audioUrl!;
       }
-      // Otherwise output text answer directly
-      return ans.text ?? "";
+
+      // If text exists along with file/audio, combine cleanly in single column
+      let result = text;
+      if (hasFile) {
+        result = result ? `${result} (File: ${ans.fileUrl})` : `(File: ${ans.fileUrl})`;
+      }
+      if (hasAudio) {
+        result = result ? `${result} (Audio: ${ans.audioUrl})` : `(Audio: ${ans.audioUrl})`;
+      }
+      return result;
     });
 
     return [...baseCols, ...answerCols];
@@ -115,6 +130,7 @@ function AdminPage() {
   const [search, setSearch] = useState("");
   const [langFilter, setLangFilter] = useState<Lang | "all">("all");
   const [audioOnly, setAudioOnly] = useState(false);
+  const [filesOnly, setFilesOnly] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -172,21 +188,29 @@ function AdminPage() {
 
     let totalAudioRecordings = 0;
     let withAudioCount = 0;
+    let totalFiles = 0;
+    let withFilesCount = 0;
+
     responses.forEach((r) => {
-      const count = Object.values(r.answers).filter((a) => Boolean(a.audioUrl)).length;
-      if (count > 0) {
+      const audioCount = Object.values(r.answers).filter((a) => Boolean(a.audioUrl)).length;
+      if (audioCount > 0) {
         withAudioCount += 1;
-        totalAudioRecordings += count;
+        totalAudioRecordings += audioCount;
+      }
+      const fileCount = Object.values(r.answers).filter((a) => Boolean(a.fileUrl)).length;
+      if (fileCount > 0) {
+        withFilesCount += 1;
+        totalFiles += fileCount;
       }
     });
 
-    return { byLang, avgRating, withAudioCount, totalAudioRecordings };
+    return { byLang, avgRating, withAudioCount, totalAudioRecordings, withFilesCount, totalFiles };
   }, [responses]);
 
   // Visual Analytics Chart Data
   const chartData = useMemo(() => {
     if (responses.length === 0) {
-      return { overTime: [], ratings: [], languages: [], states: [] };
+      return { overTime: [], ratings: [], languages: [], states: [], previousKumbh: [] };
     }
 
     // 1. Responses over time
@@ -268,7 +292,38 @@ function AdminPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
 
-    return { overTime, ratings, languages, states };
+    // 5. Previous Kumbh attendance distribution
+    const kumbhCounts: Record<string, number> = {
+      "Prayagraj (2024)": 0,
+      "Haridwar (2010)": 0,
+      "Ujjain (2004)": 0,
+      "Nashik (2015)": 0,
+      "First-time Visitor": 0,
+    };
+
+    responses.forEach((r) => {
+      const val =
+        r.answers["previous_kumbh"]?.text?.trim() ||
+        r.answers["previous_kumbh"]?.choice?.trim();
+      if (!val) return;
+      if (val.includes("2024") || val.includes("Prayagraj") || val.includes("प्रयागराज")) {
+        kumbhCounts["Prayagraj (2024)"] += 1;
+      } else if (val.includes("2010") || val.includes("Haridwar") || val.includes("हरिद्वार")) {
+        kumbhCounts["Haridwar (2010)"] += 1;
+      } else if (val.includes("2004") || val.includes("Ujjain") || val.includes("उज्जैन")) {
+        kumbhCounts["Ujjain (2004)"] += 1;
+      } else if (val.includes("2015") || val.includes("Nashik") || val.includes("नासिक") || val.includes("नाशिक")) {
+        kumbhCounts["Nashik (2015)"] += 1;
+      } else {
+        kumbhCounts["First-time Visitor"] += 1;
+      }
+    });
+
+    const previousKumbh = Object.entries(kumbhCounts)
+      .map(([mela, count]) => ({ mela, count }))
+      .filter((item) => item.count > 0);
+
+    return { overTime, ratings, languages, states, previousKumbh };
   }, [responses]);
 
   // Filtered
@@ -279,6 +334,10 @@ function AdminPage() {
         const hasAudio = Object.values(r.answers).some((a) => Boolean(a.audioUrl));
         if (!hasAudio) return false;
       }
+      if (filesOnly) {
+        const hasFiles = Object.values(r.answers).some((a) => Boolean(a.fileUrl));
+        if (!hasFiles) return false;
+      }
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchId = r.id.toLowerCase().includes(q);
@@ -288,11 +347,17 @@ function AdminPage() {
         const matchAudio =
           (q === "audio" || q === "voice" || q === "mic") &&
           Object.values(r.answers).some((a) => Boolean(a.audioUrl));
-        return matchId || matchText || matchAudio;
+        const matchFile =
+          (q === "file" || q === "files" || q === "upload" || q === "image" || q === "video") &&
+          Object.values(r.answers).some((a) => Boolean(a.fileUrl));
+        const matchFileName = Object.values(r.answers).some(
+          (a) => a.fileName?.toLowerCase().includes(q),
+        );
+        return matchId || matchText || matchAudio || matchFile || matchFileName;
       }
       return true;
     });
-  }, [responses, search, langFilter, audioOnly]);
+  }, [responses, search, langFilter, audioOnly, filesOnly]);
 
   const handleExport = async () => {
     setExporting(true);
@@ -496,33 +561,64 @@ function AdminPage() {
               </div>
             </div>
 
-            {/* Location / State Insights (if data exists) */}
-            {chartData.states.length > 0 && (
-              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-base font-semibold text-foreground">Top Visitor Locations</h2>
-                  <p className="text-xs text-muted-foreground">Most frequent origins reported by pilgrims</p>
+            {/* Location & Previous Kumbh Insights Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              {/* Location / State Insights (if data exists) */}
+              {chartData.states.length > 0 && (
+                <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                  <div className="mb-4">
+                    <h2 className="text-base font-semibold text-foreground">Top Visitor Locations</h2>
+                    <p className="text-xs text-muted-foreground">Most frequent origins reported by pilgrims</p>
+                  </div>
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={chartData.states} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
+                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <YAxis dataKey="state" type="category" tick={{ fontSize: 12, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={100} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "var(--color-card)",
+                            borderColor: "var(--color-border)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-                <div className="h-56 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart layout="vertical" data={chartData.states} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
-                      <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                      <YAxis dataKey="state" type="category" tick={{ fontSize: 12, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={100} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-card)",
-                          borderColor: "var(--color-border)",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                      />
-                      <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+              )}
+
+              {/* Previous Kumbh Attendance Insights (if data exists) */}
+              {chartData.previousKumbh.length > 0 && (
+                <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                  <div className="mb-4">
+                    <h2 className="text-base font-semibold text-foreground">Previous Kumbh Attendance</h2>
+                    <p className="text-xs text-muted-foreground">Past Kumbh Melas attended by respondents</p>
+                  </div>
+                  <div className="h-56 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart layout="vertical" data={chartData.previousKumbh} margin={{ top: 5, right: 20, left: 25, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
+                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                        <YAxis dataKey="mela" type="category" tick={{ fontSize: 11, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={125} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "var(--color-card)",
+                            borderColor: "var(--color-border)",
+                            borderRadius: "8px",
+                            fontSize: "12px",
+                          }}
+                        />
+                        <Bar dataKey="count" fill="#8b5cf6" radius={[0, 6, 6, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </section>
         )}
 
@@ -557,6 +653,15 @@ function AdminPage() {
             >
               <Mic className="h-3 w-3 inline mr-1" />
               With Audio ({stats.withAudioCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilesOnly((prev) => !prev)}
+              className={`admin-lang-btn ${filesOnly ? "active" : ""}`}
+              title="Filter responses with file attachments"
+            >
+              <Paperclip className="h-3 w-3 inline mr-1" />
+              With Files ({stats.withFilesCount})
             </button>
           </div>
         </section>
@@ -645,7 +750,11 @@ function ResponseCard({
   const stateAudio = stateObj?.audioUrl;
 
   const expRating = response.answers["experience"]?.text;
+  const prevKumbh =
+    response.answers["previous_kumbh"]?.text?.trim() ||
+    response.answers["previous_kumbh"]?.choice?.trim();
   const audioCount = Object.values(response.answers).filter((a) => Boolean(a.audioUrl)).length;
+  const fileCount = Object.values(response.answers).filter((a) => Boolean(a.fileUrl)).length;
 
   return (
     <div className={`response-card ${expanded ? "response-card-expanded" : ""}`}>
@@ -678,9 +787,22 @@ function ResponseCard({
                 <Star className="h-3 w-3" /> {!isNaN(Number(expRating)) ? `${expRating}/5` : expRating}
               </span>
             )}
+            {prevKumbh && (
+              <span
+                className="response-lang-pill bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+                title={`Previous Kumbh: ${prevKumbh}`}
+              >
+                🏛️ {prevKumbh.includes("नहीं") || prevKumbh.includes("नाही") || prevKumbh.includes("not attended") ? "First-time" : prevKumbh}
+              </span>
+            )}
             {audioCount > 0 && (
               <span className="response-audio-badge">
                 <Mic className="h-3 w-3" /> {audioCount} audio
+              </span>
+            )}
+            {fileCount > 0 && (
+              <span className="response-audio-badge text-blue-600 bg-blue-500/10 border-blue-500/20">
+                <Paperclip className="h-3 w-3" /> {fileCount} file{fileCount > 1 ? "s" : ""}
               </span>
             )}
             <span className="response-date">
@@ -704,16 +826,25 @@ function ResponseCard({
               const a = response.answers[q.id];
               const hasText = Boolean(a?.text?.trim());
               const hasAudio = Boolean(a?.audioUrl);
+              const hasFile = Boolean(a?.fileUrl);
 
-              if (!a && !hasAudio) return null;
+              if (!a && !hasAudio && !hasFile) return null;
 
               return (
                 <div key={q.id} className="answer-item">
                   <div className="answer-header-row">
                     <dt className="answer-question">{q.label.en}</dt>
-                    {hasAudio ? (
+                    {hasFile ? (
+                      <span className="answer-type-tag bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center gap-1">
+                        <Paperclip className="h-2.5 w-2.5" /> File
+                      </span>
+                    ) : hasAudio ? (
                       <span className="answer-type-tag answer-type-audio flex items-center gap-1">
                         <Mic className="h-2.5 w-2.5" /> Audio
+                      </span>
+                    ) : q.type === "checkbox" ? (
+                      <span className="answer-type-tag bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                        Checkboxes
                       </span>
                     ) : q.type === "choice" ? (
                       <span className="answer-type-tag answer-type-choice">Option</span>
@@ -723,6 +854,51 @@ function ResponseCard({
                     {/* Render text if present */}
                     {hasText && (
                       <span className="answer-text">{a!.text}</span>
+                    )}
+
+                    {/* Render file attachment if present */}
+                    {hasFile && (
+                      <div className="mt-2 flex items-center gap-3 rounded-lg border border-border bg-card/70 p-2.5">
+                        {a!.fileType?.startsWith("image/") ||
+                        a!.fileUrl?.match(/\.(jpeg|jpg|png|gif|webp)/i) ? (
+                          <a
+                            href={a!.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 group relative"
+                            title="Open full image"
+                          >
+                            <img
+                              src={a!.fileUrl}
+                              alt={a!.fileName || "Uploaded attachment"}
+                              className="h-14 w-14 rounded object-cover border border-border transition-transform group-hover:scale-105"
+                            />
+                          </a>
+                        ) : a!.fileType?.startsWith("video/") ||
+                          a!.fileUrl?.match(/\.(mp4|webm|mov|ogg)/i) ? (
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                            <Film className="h-6 w-6" />
+                          </div>
+                        ) : (
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                            <Paperclip className="h-6 w-6" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-foreground truncate">
+                            {a!.fileName || "Attachment"}
+                          </p>
+                          <a
+                            href={a!.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline mt-0.5"
+                          >
+                            <span>Open file</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      </div>
                     )}
 
                     {/* Render audio player if audio was submitted */}
@@ -741,8 +917,8 @@ function ResponseCard({
                       </div>
                     )}
 
-                    {/* Only show '—' if neither text nor audio is present */}
-                    {!hasText && !hasAudio && (
+                    {/* Only show '—' if neither text, audio, nor file is present */}
+                    {!hasText && !hasAudio && !hasFile && (
                       <span className="answer-empty">—</span>
                     )}
                   </dd>

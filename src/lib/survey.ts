@@ -1,6 +1,6 @@
 export type Lang = "en" | "hi" | "mr";
 
-export type QuestionType = "text" | "longtext" | "rating" | "choice";
+export type QuestionType = "text" | "longtext" | "rating" | "choice" | "checkbox" | "file_text";
 
 export interface Question {
   id: string;
@@ -25,6 +25,7 @@ export const UI = {
     back: "Back",
     submit: "Submit",
     required: "This question is required",
+    optional: "Optional",
     yourAnswer: "Your answer",
     question: "Question",
     of: "of",
@@ -32,6 +33,7 @@ export const UI = {
     listening: "Listening…",
     record: "Record audio answer",
     stop: "Stop recording",
+    stopHint: "Click 'Stop recording' when done speaking.",
     rerecord: "Record again",
     done: "Response recorded",
     thanks: "Thank you!",
@@ -41,6 +43,14 @@ export const UI = {
     noSpeech: "Voice typing is not supported in this browser.",
     noMic: "Microphone is not available in this browser.",
     skip: "Skip",
+    specifyMedical: "Please specify the medical assistance needed...",
+    uploadFile: "Upload photo, video, or document",
+    chooseFile: "Choose file",
+    noFileChosen: "No file chosen",
+    fileAttached: "File attached",
+    removeFile: "Remove",
+    uploadHint: "Photo, video, audio, or document (up to 10MB)",
+    fileTooLarge: "File size exceeds 10MB limit. Please choose a smaller file.",
   },
   hi: {
     title: "कुंभ मेला आगंतुक सर्वेक्षण",
@@ -51,6 +61,7 @@ export const UI = {
     back: "पीछे",
     submit: "जमा करें",
     required: "यह प्रश्न आवश्यक है",
+    optional: "वैकल्पिक",
     yourAnswer: "आपका उत्तर",
     question: "प्रश्न",
     of: "में से",
@@ -58,6 +69,7 @@ export const UI = {
     listening: "सुन रहे हैं…",
     record: "ऑडियो उत्तर रिकॉर्ड करें",
     stop: "रिकॉर्डिंग रोकें",
+    stopHint: "बोलना पूरा होने पर 'रिकॉर्डिंग रोकें' बटन दबाएं।",
     rerecord: "फिर से रिकॉर्ड करें",
     done: "उत्तर रिकॉर्ड हुआ",
     thanks: "धन्यवाद!",
@@ -67,6 +79,14 @@ export const UI = {
     noSpeech: "इस ब्राउज़र में बोलकर लिखना उपलब्ध नहीं है।",
     noMic: "इस ब्राउज़र में माइक्रोफ़ोन उपलब्ध नहीं है।",
     skip: "छोड़ें",
+    specifyMedical: "कृपया आवश्यक चिकित्सा सहायता का विवरण दें...",
+    uploadFile: "फ़ोटो, वीडियो या दस्तावेज़ अपलोड करें",
+    chooseFile: "फ़ाइल चुनें",
+    noFileChosen: "कोई फ़ाइल नहीं चुनी गई",
+    fileAttached: "फ़ाइल संलग्न है",
+    removeFile: "हटाएं",
+    uploadHint: "फ़ोटो, वीडियो, ऑडियो या दस्तावेज़ (अधिकतम 10MB)",
+    fileTooLarge: "फ़ाइल का आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइल चुनें।",
   },
   mr: {
     title: "कुंभमेळा अभ्यागत सर्वेक्षण",
@@ -77,6 +97,7 @@ export const UI = {
     back: "मागे",
     submit: "सबमिट करा",
     required: "हा प्रश्न आवश्यक आहे",
+    optional: "पर्यायी",
     yourAnswer: "तुमचे उत्तर",
     question: "प्रश्न",
     of: "पैकी",
@@ -84,6 +105,7 @@ export const UI = {
     listening: "ऐकत आहे…",
     record: "ऑडिओ उत्तर रेकॉर्ड करा",
     stop: "रेकॉर्डिंग थांबवा",
+    stopHint: "बोलणे पूर्ण झाल्यावर 'रेकॉर्डिंग थांबवा' बटण दाबा.",
     rerecord: "पुन्हा रेकॉर्ड करा",
     done: "उत्तर रेकॉर्ड झाले",
     thanks: "धन्यवाद!",
@@ -93,6 +115,14 @@ export const UI = {
     noSpeech: "या ब्राउझरमध्ये बोलून लिहिणे उपलब्ध नाही.",
     noMic: "या ब्राउझरमध्ये मायक्रोफोन उपलब्ध नाही.",
     skip: "वगळा",
+    specifyMedical: "कृपया आवश्यक वैद्यकीय मदतीचा तपशील द्या...",
+    uploadFile: "फोटो, व्हिडिओ किंवा कागदपत्र अपलोड करा",
+    chooseFile: "फाईल निवडा",
+    noFileChosen: "कोणतीही फाईल निवडलेली नाही",
+    fileAttached: "फाईल जोडली आहे",
+    removeFile: "काढा",
+    uploadHint: "फोटो, व्हिडिओ, ऑडिओ किंवा कागदपत्र (कमाल 10MB)",
+    fileTooLarge: "फाईलचा आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल निवडा.",
   },
 };
 
@@ -131,7 +161,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "reason",
-    type: "choice",
+    type: "checkbox",
     label: {
       en: "What was your primary reason for attending?",
       hi: "आने का आपका मुख्य कारण क्या था?",
@@ -144,8 +174,40 @@ export const QUESTIONS: Question[] = [
     },
   },
   {
-    id: "travel",
+    id: "previous_kumbh",
     type: "choice",
+    label: {
+      en: "Have you attended any previous Kumbh Mela?",
+      hi: "क्या आपने पहले किसी कुंभ मेले में भाग लिया है?",
+      mr: "तुम्ही यापूर्वी कोणत्याही कुंभमेळ्यात सहभागी झाला आहात का?",
+    },
+    options: {
+      en: [
+        "Prayagraj (2024)",
+        "Haridwar (2010)",
+        "Ujjain (2004)",
+        "Nashik (2015)",
+        "Have not attended any previous Kumbh Mela",
+      ],
+      hi: [
+        "प्रयागराज (2024)",
+        "हरिद्वार (2010)",
+        "उज्जैन (2004)",
+        "नासिक (2015)",
+        "आपने पिछले किसी भी कुम्भ मेलों में भाग नहीं लिया है",
+      ],
+      mr: [
+        "प्रयागराज (2024)",
+        "हरिद्वार (2010)",
+        "उज्जैन (2004)",
+        "नाशिक (2015)",
+        "यापूर्वी कोणत्याही कुंभमेळ्यात सहभागी झालेलो नाही",
+      ],
+    },
+  },
+  {
+    id: "travel",
+    type: "checkbox",
     label: {
       en: "What was your mode of travel?",
       hi: "आपकी यात्रा का माध्यम क्या था?",
@@ -280,7 +342,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "challenges",
-    type: "choice",
+    type: "checkbox",
     label: {
       en: "What challenges did you face?",
       hi: "आपको किन कठिनाइयों का सामना करना पड़ा?",
@@ -315,11 +377,25 @@ export const QUESTIONS: Question[] = [
       mr: "वैद्यकीय/आपत्कालीन सुविधा सुधारण्यासाठी सूचना?",
     },
   },
+  {
+    id: "additional_feedback",
+    type: "file_text",
+    label: {
+      en: "Is there anything else you would like to share?",
+      hi: "क्या आप कुछ और साझा करना चाहते हैं?",
+      mr: "तुम्हाला इतर काही सांगायचे किंवा शेअर करायचे आहे का?",
+    },
+  },
 ];
 
 export interface Answer {
-  text: string;
+  text?: string | undefined;
   audioUrl?: string | undefined;
+  fileUrl?: string | undefined;
+  fileName?: string | undefined;
+  fileType?: string | undefined;
+  choice?: string | undefined;
+  details?: string | undefined;
 }
 
 export type Answers = Record<string, Answer>;
@@ -370,6 +446,10 @@ export async function saveResponse(res: StoredResponse): Promise<void> {
 
   try {
     const { db } = await import("@/lib/firebase");
+    if (!db) {
+      console.warn("[survey] Firebase is not configured. Saved to localStorage only.");
+      return;
+    }
     const { doc, setDoc } = await import("firebase/firestore");
     const cleanData = sanitizeForFirestore(res);
     await setDoc(doc(db, "responses", res.id), cleanData);
@@ -385,6 +465,10 @@ export async function saveResponse(res: StoredResponse): Promise<void> {
 export async function loadResponses(): Promise<StoredResponse[]> {
   try {
     const { db } = await import("@/lib/firebase");
+    if (!db) {
+      console.warn("[survey] Firebase is not configured. Loading from localStorage only.");
+      return loadLocal();
+    }
     const { collection, getDocs, orderBy, query } = await import("firebase/firestore");
     const q = query(collection(db, "responses"), orderBy("submittedAt", "desc"));
     const snap = await getDocs(q);

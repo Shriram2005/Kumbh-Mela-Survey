@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Check, Loader2 } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  Loader2,
+  Upload,
+  Paperclip,
+  Film,
+  X,
+} from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { VoiceInput } from "@/components/VoiceInput";
 import {
@@ -9,9 +18,10 @@ import {
   UI,
   saveResponse,
   type Answers,
+  type Answer,
   type Lang,
 } from "@/lib/survey";
-import { uploadAudioToS3 } from "@/lib/s3";
+import { uploadAudioToS3, uploadFileToS3 } from "@/lib/s3";
 import { saveDraft, loadDraft, clearDraft } from "@/lib/draft";
 
 export const Route = createFileRoute("/")({
@@ -38,19 +48,22 @@ function SurveyPage() {
   const [lang, setLang] = useState<Lang | null>(null);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
-
   const [error, setError] = useState(false);
+
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
   const audioBlobsRef = useRef<Record<string, Blob>>({});
+  // Attached files kept in memory until final submit
+  const filesRef = useRef<Record<string, File | Blob>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Generate a stable response ID for the entire survey session
   const responseIdRef = useRef<string>(crypto.randomUUID());
   const draftRestoredRef = useRef(false);
 
-  // Restore draft on mount if one exists — show a brief toast instead of a modal
+  // Restore draft on mount if one exists
   useEffect(() => {
     let active = true;
     loadDraft().then((draft) => {
@@ -66,6 +79,22 @@ function SurveyPage() {
             restoredAnswers[qid] = {
               ...restoredAnswers[qid],
               audioUrl: URL.createObjectURL(blob),
+            };
+          }
+        });
+      }
+      if (draft.files) {
+        filesRef.current = { ...draft.files };
+        Object.entries(draft.files).forEach(([qid, fileOrBlob]) => {
+          if (restoredAnswers[qid]) {
+            restoredAnswers[qid] = {
+              ...restoredAnswers[qid],
+              fileUrl: URL.createObjectURL(fileOrBlob),
+              fileName:
+                fileOrBlob instanceof File
+                  ? fileOrBlob.name
+                  : restoredAnswers[qid].fileName || "attachment",
+              fileType: fileOrBlob.type || restoredAnswers[qid].fileType,
             };
           }
         });
@@ -95,6 +124,7 @@ function SurveyPage() {
       responseId: responseIdRef.current,
       answers,
       audioBlobs: audioBlobsRef.current,
+      files: filesRef.current,
       updatedAt: Date.now(),
     });
   }, [lang, step, answers, submitted]);
@@ -114,7 +144,20 @@ function SurveyPage() {
   const current = answers[question.id] ?? { text: "" };
   const progress = useMemo(() => ((step + 1) / total) * 100, [step, total]);
 
-  const update = (patch: Partial<{ text: string; audioUrl?: string | undefined }>) => {
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+
+  useEffect(() => {
+    setIsRecordingAudio(false);
+  }, [step]);
+
+  const hasAudioAnswer = Boolean(current.audioUrl) || isRecordingAudio;
+
+  const isTypingQuestion =
+    question.type === "text" ||
+    question.type === "longtext" ||
+    question.type === "file_text";
+
+  const update = (patch: Partial<Answer>) => {
     setAnswers((prev) => ({
       ...prev,
       [question.id]: { ...(prev[question.id] ?? { text: "" }), ...patch },
@@ -122,17 +165,59 @@ function SurveyPage() {
     setError(false);
   };
 
-  const goNext = async () => {
-    if (!current.text.trim() && !current.audioUrl) {
-      setError(true);
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      toast.error(t.fileTooLarge || "File size exceeds 10MB limit. Please choose a smaller file.");
+      e.target.value = "";
       return;
     }
+
+    filesRef.current[question.id] = file;
+    const previewUrl = URL.createObjectURL(file);
+    update({
+      fileUrl: previewUrl,
+      fileName: file.name,
+      fileType: file.type,
+    });
+    e.target.value = "";
+  };
+
+  const handleRemoveFile = () => {
+    if (current.fileUrl && current.fileUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(current.fileUrl);
+    }
+    delete filesRef.current[question.id];
+    update({
+      fileUrl: undefined,
+      fileName: undefined,
+      fileType: undefined,
+    });
+  };
+
+  const goNext = async () => {
+    // Only typing questions are optional; choice and checkbox questions are required like before
+    if (!isTypingQuestion) {
+      const hasText = Boolean(current.text?.trim());
+      const hasAudio = Boolean(current.audioUrl);
+      if (!hasText && !hasAudio) {
+        setError(true);
+        return;
+      }
+    }
+    setError(false);
+
     if (step === total - 1) {
       setSubmitting(true);
       try {
-        // Upload only the final, confirmed audio recordings to AWS S3
         const finalAnswers: Answers = { ...answers };
-        const uploadPromises = Object.entries(audioBlobsRef.current).map(
+
+        // 1. Upload audio recordings to AWS S3
+        const audioUploadPromises = Object.entries(audioBlobsRef.current).map(
           async ([qid, blob]) => {
             try {
               const s3Url = await uploadAudioToS3(blob, responseIdRef.current, qid);
@@ -144,16 +229,46 @@ function SurveyPage() {
           },
         );
 
-        const uploadResults = await Promise.all(uploadPromises);
-        for (const { qid, s3Url } of uploadResults) {
+        // 2. Upload attached files to AWS S3
+        const fileUploadPromises = Object.entries(filesRef.current).map(
+          async ([qid, fileOrBlob]) => {
+            try {
+              const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
+              const s3Url = await uploadFileToS3(fileOrBlob, responseIdRef.current, qid, fileName);
+              return { qid, s3Url, fileName };
+            } catch (err) {
+              console.error(`Failed to upload file for question ${qid} to S3:`, err);
+              return { qid, s3Url: undefined, fileName: undefined };
+            }
+          },
+        );
+
+        const [audioResults, fileResults] = await Promise.all([
+          Promise.all(audioUploadPromises),
+          Promise.all(fileUploadPromises),
+        ]);
+
+        for (const { qid, s3Url } of audioResults) {
           if (finalAnswers[qid] && s3Url) {
             finalAnswers[qid] = {
               ...finalAnswers[qid],
               audioUrl: s3Url,
             };
           } else if (finalAnswers[qid]) {
-            // Remove blob: URL — don't persist local blob URLs to Firestore
             const { audioUrl: _blobUrl, ...rest } = finalAnswers[qid] as any;
+            finalAnswers[qid] = rest;
+          }
+        }
+
+        for (const { qid, s3Url, fileName } of fileResults) {
+          if (finalAnswers[qid] && s3Url) {
+            finalAnswers[qid] = {
+              ...finalAnswers[qid],
+              fileUrl: s3Url,
+              fileName: fileName ?? finalAnswers[qid].fileName,
+            };
+          } else if (finalAnswers[qid]) {
+            const { fileUrl: _fileBlobUrl, ...rest } = finalAnswers[qid] as any;
             finalAnswers[qid] = rest;
           }
         }
@@ -173,8 +288,12 @@ function SurveyPage() {
           if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
             URL.revokeObjectURL(a.audioUrl);
           }
+          if (a.fileUrl && a.fileUrl.startsWith("blob:")) {
+            URL.revokeObjectURL(a.fileUrl);
+          }
         });
         audioBlobsRef.current = {};
+        filesRef.current = {};
 
         setSubmitted(true);
       } catch (err) {
@@ -185,7 +304,6 @@ function SurveyPage() {
       return;
     }
     setStep((s) => s + 1);
-    setError(false);
   };
 
   const restart = () => {
@@ -195,8 +313,12 @@ function SurveyPage() {
       if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
         URL.revokeObjectURL(a.audioUrl);
       }
+      if (a.fileUrl && a.fileUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(a.fileUrl);
+      }
     });
     audioBlobsRef.current = {};
+    filesRef.current = {};
     setAnswers({});
     setStep(0);
     setSubmitted(false);
@@ -268,6 +390,7 @@ function SurveyPage() {
   }
 
   const handleBack = () => {
+    setError(false);
     if (step === 0) {
       setLang(null);
     } else {
@@ -347,7 +470,14 @@ function SurveyPage() {
                       <audio src={ans.audioUrl} controls className="h-8 max-w-[200px]" />
                     </div>
                   ) : null}
-                  {!ans?.text && !ans?.audioUrl && (
+                  {ans?.fileUrl ? (
+                    <div className="mt-2 flex items-center justify-end gap-2 text-xs font-medium text-primary">
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-primary">
+                        📎 {ans.fileName || t.fileAttached}
+                      </span>
+                    </div>
+                  ) : null}
+                  {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (
                     <p className="text-sm italic text-muted-foreground">—</p>
                   )}
                 </div>
@@ -363,15 +493,25 @@ function SurveyPage() {
             >
               <div className="h-1.5 w-full bg-primary/80" />
               <div className="p-5 sm:p-8">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t.question} {step + 1} {t.of} {total}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {t.question} {step + 1} {t.of} {total}
+                  </p>
+                  {isTypingQuestion ? (
+                    <span className="text-xs font-medium text-muted-foreground/80 bg-muted px-2 py-0.5 rounded">
+                      {t.optional}
+                    </span>
+                  ) : null}
+                </div>
                 <h1 className="mt-3 text-lg font-medium leading-snug text-foreground sm:text-xl">
                   {q.label[lang]}
+                  {!isTypingQuestion && (
+                    <span className="text-destructive font-semibold ml-1" title={t.required}>*</span>
+                  )}
                 </h1>
 
                 <div className="mt-5">
-                  {q.type === "text" && (
+                  {q.type === "text" && !hasAudioAnswer && (
                     <input
                       value={current.text}
                       onChange={(e) => update({ text: e.target.value })}
@@ -380,7 +520,7 @@ function SurveyPage() {
                     />
                   )}
 
-                  {q.type === "longtext" && (
+                  {q.type === "longtext" && !hasAudioAnswer && (
                     <textarea
                       value={current.text}
                       onChange={(e) => update({ text: e.target.value })}
@@ -409,44 +549,224 @@ function SurveyPage() {
                     </div>
                   )}
 
+                  {/* Single Choice (Radio) */}
                   {q.type === "choice" && (
                     <div className="space-y-2">
-                      {q.options![lang].map((opt) => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => update({ text: opt })}
-                          className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors ${
-                            current.text === opt
-                              ? "border-primary bg-primary/5 font-medium"
-                              : "border-border hover:bg-accent"
-                          }`}
-                        >
-                          <span
-                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                              current.text === opt ? "border-primary" : "border-muted-foreground"
+                      {q.options![lang].map((opt, optIdx) => {
+                        const isYesOption = optIdx === 0;
+                        const isSelected =
+                          current.choice === opt ||
+                          current.text === opt ||
+                          Boolean(isYesOption && current.text?.startsWith(opt + " - "));
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              if (q.id === "medical_needed") {
+                                if (isYesOption) {
+                                  const details = current.details ?? "";
+                                  update({
+                                    choice: opt,
+                                    details,
+                                    text: details.trim() ? `${opt} - ${details.trim()}` : opt,
+                                  });
+                                } else {
+                                  update({
+                                    choice: opt,
+                                    details: "",
+                                    text: opt,
+                                  });
+                                }
+                              } else {
+                                update({ text: opt });
+                              }
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors ${
+                              isSelected
+                                ? "border-primary bg-primary/5 font-medium"
+                                : "border-border hover:bg-accent"
                             }`}
                           >
-                            {current.text === opt && (
-                              <span className="h-2 w-2 rounded-full bg-primary" />
-                            )}
-                          </span>
-                          {opt}
-                        </button>
-                      ))}
+                            <span
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                                isSelected ? "border-primary" : "border-muted-foreground"
+                              }`}
+                            >
+                              {isSelected && (
+                                <span className="h-2 w-2 rounded-full bg-primary" />
+                              )}
+                            </span>
+                            {opt}
+                          </button>
+                        );
+                      })}
+
+                      {/* Q9 conditional input field if Yes is selected */}
+                      {q.id === "medical_needed" &&
+                        (current.choice === q.options![lang][0] ||
+                          current.text === q.options![lang][0] ||
+                          Boolean(current.text?.startsWith(q.options![lang][0] + " - "))) && (
+                          <div className="mt-3 pt-3 border-t border-border">
+                            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                              {t.specifyMedical}
+                            </label>
+                            <input
+                              value={
+                                current.details ??
+                                (current.text && current.text.includes(" - ")
+                                  ? current.text.split(" - ").slice(1).join(" - ")
+                                  : "")
+                              }
+                              onChange={(e) => {
+                                const details = e.target.value;
+                                const choice = q.options?.[lang]?.[0] ?? "Yes";
+                                const formatted: string = details.trim()
+                                  ? `${choice} - ${details.trim()}`
+                                  : choice;
+                                update({
+                                  choice,
+                                  details,
+                                  text: formatted,
+                                });
+                              }}
+                              placeholder={t.specifyMedical}
+                              className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
+                              autoFocus
+                            />
+                          </div>
+                        )}
+                    </div>
+                  )}
+
+                  {/* Multi-select Checkboxes for Q4, Q5, Q15 */}
+                  {q.type === "checkbox" && (
+                    <div className="space-y-2">
+                      {q.options![lang].map((opt) => {
+                        const selectedList = current.text
+                          ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
+                          : [];
+                        const isChecked = selectedList.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              const nextList = isChecked
+                                ? selectedList.filter((s) => s !== opt)
+                                : [...selectedList, opt];
+                              update({ text: nextList.join(", ") });
+                            }}
+                            className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors ${
+                              isChecked
+                                ? "border-primary bg-primary/5 font-medium"
+                                : "border-border hover:bg-accent"
+                            }`}
+                          >
+                            <span
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                                isChecked
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-muted-foreground"
+                              }`}
+                            >
+                              {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
+                            </span>
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Final Question: Feedback Text + Simple File Upload */}
+                  {q.type === "file_text" && (
+                    <div className="space-y-4">
+                      {!hasAudioAnswer && (
+                        <textarea
+                          value={current.text}
+                          onChange={(e) => update({ text: e.target.value })}
+                          placeholder={t.yourAnswer}
+                          rows={4}
+                          className="w-full resize-none rounded-lg border border-border bg-transparent p-3 text-base outline-none transition-colors focus:border-primary"
+                        />
+                      )}
+
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                          onChange={handleFileChange}
+                          className="hidden"
+                          id="survey-file-upload"
+                        />
+                        {!current.fileUrl ? (
+                          <label
+                            htmlFor="survey-file-upload"
+                            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-5 text-center cursor-pointer transition-colors hover:border-primary/60 hover:bg-accent/40"
+                          >
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <Upload className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{t.uploadFile}</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">{t.uploadHint}</p>
+                            </div>
+                          </label>
+                        ) : (
+                          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {current.fileType?.startsWith("image/") ? (
+                                <img
+                                  src={current.fileUrl}
+                                  alt="Preview"
+                                  className="h-12 w-12 rounded object-cover border border-border shrink-0"
+                                />
+                              ) : current.fileType?.startsWith("video/") ? (
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                                  <Film className="h-6 w-6" />
+                                </div>
+                              ) : (
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                                  <Paperclip className="h-6 w-6" />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">
+                                  {current.fileName || t.fileAttached}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {current.fileType || t.fileAttached}
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleRemoveFile}
+                              className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                              title={t.removeFile}
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Voice input: hidden for choice/rating questions */}
+                {/* Voice input: available for text, longtext, and file_text */}
                 <VoiceInput
                   lang={lang}
                   questionType={q.type}
+                  disableAudioRecording={q.id === "name"}
                   existingText={current.text}
                   onTranscript={(text) =>
                     update({ text: current.text ? `${current.text} ${text}` : text })
                   }
                   audioUrl={current.audioUrl}
+                  onRecordingChange={setIsRecordingAudio}
                   onAudio={(blob, previewUrl) => {
                     if (blob && previewUrl) {
                       audioBlobsRef.current[q.id] = blob;
@@ -458,8 +778,11 @@ function SurveyPage() {
                     }
                   }}
                   onRecordStart={() => {
-                    // Wipe typed text when user starts audio recording
-                    update({ text: "" });
+                    if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
+                      URL.revokeObjectURL(current.audioUrl);
+                    }
+                    delete audioBlobsRef.current[q.id];
+                    update({ text: "", audioUrl: undefined });
                   }}
                 />
 

@@ -48,6 +48,19 @@ npm install
 bun install
 ```
 
+### Environment Configuration
+
+Copy the sample environment file and configure your credentials:
+
+```bash
+cp .env.example .env
+```
+
+Configure your credentials in `.env`:
+- **Firebase**: For storing survey responses in Firestore
+- **AWS S3**: For uploading recorded audio answers and media attachments
+
+
 ### Running Locally
 
 Start the local development server:

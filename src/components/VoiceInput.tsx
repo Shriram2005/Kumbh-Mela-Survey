@@ -7,12 +7,16 @@ interface Props {
   lang: Lang;
   questionType: QuestionType;
   /** Existing text typed by the user (used to warn before discarding). */
-  existingText?: string;
+  existingText?: string | undefined;
   onTranscript: (text: string) => void;
   audioUrl?: string | undefined;
   onAudio: (blob: Blob | undefined, previewUrl: string | undefined) => void;
   /** Called when recording starts so parent can wipe text answer. */
-  onRecordStart?: () => void;
+  onRecordStart?: (() => void) | undefined;
+  /** Called when recording starts or stops. */
+  onRecordingChange?: ((isRecording: boolean) => void) | undefined;
+  /** When true, disables the audio recording button and only keeps voice typing. */
+  disableAudioRecording?: boolean | undefined;
 }
 
 /**
@@ -67,6 +71,8 @@ export function VoiceInput({
   audioUrl,
   onAudio,
   onRecordStart,
+  onRecordingChange,
+  disableAudioRecording,
 }: Props) {
   const t = UI[lang];
   const [listening, setListening] = useState(false);
@@ -78,8 +84,9 @@ export function VoiceInput({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
 
-  // Voice input is only relevant for free-text questions, not choices/ratings
-  const showVoiceControls = questionType === "text" || questionType === "longtext";
+  // Voice input is only relevant for free-text and feedback questions, not choices/ratings
+  const showVoiceControls =
+    questionType === "text" || questionType === "longtext" || questionType === "file_text";
 
   useEffect(() => {
     // Only show Voice Typing button if the platform genuinely supports it (hidden on iOS/Safari)
@@ -90,6 +97,7 @@ export function VoiceInput({
     return () => {
       recognitionRef.current?.stop?.();
       recorderRef.current?.stream?.getTracks().forEach((track) => track.stop());
+      onRecordingChange?.(false);
     };
   }, []);
 
@@ -183,6 +191,7 @@ export function VoiceInput({
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
         stream.getTracks().forEach((track) => track.stop());
         setRecording(false);
+        onRecordingChange?.(false);
         setRecordingSeconds(0);
 
         // Keep compressed audio locally in-memory — zero uploads to AWS until final submit
@@ -192,9 +201,13 @@ export function VoiceInput({
       recorderRef.current = recorder;
       setNotice(null);
       setRecordingSeconds(0);
+      onRecordStart?.();
       recorder.start();
       setRecording(true);
+      onRecordingChange?.(true);
     } catch {
+      setRecording(false);
+      onRecordingChange?.(false);
       setNotice(t.noMic);
     }
   };
@@ -209,8 +222,8 @@ export function VoiceInput({
   return (
     <div className="mt-4 space-y-3">
       <div className="flex flex-wrap gap-2">
-        {/* Hidden on iOS / Safari / unsupported devices to prevent broken UX */}
-        {speechSupported && (
+        {/* Hidden on iOS / Safari / unsupported devices, and hidden while recording or once audio is recorded */}
+        {speechSupported && !audioUrl && !recording && (
           <button
             type="button"
             onClick={toggleDictation}
@@ -225,47 +238,63 @@ export function VoiceInput({
           </button>
         )}
 
-        <button
-          type="button"
-          onClick={toggleRecording}
-          className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
-            recording
-              ? "border-destructive bg-destructive/10 text-destructive"
-              : "border-border bg-card text-foreground hover:bg-accent"
-          }`}
-        >
-          {recording ? (
-            <span className="relative flex h-4 w-4 items-center justify-center" aria-hidden="true">
-              <span className="absolute h-3 w-3 animate-ping rounded-full bg-destructive/40" />
-              <span className="relative h-2.5 w-2.5 rounded-full bg-destructive" />
-            </span>
-          ) : (
-            <Play className="h-4 w-4" />
-          )}
-          {recording ? (
-            <span aria-live="polite">
-              {t.stop} · {Math.floor(recordingSeconds / 60)}:
-              {String(recordingSeconds % 60).padStart(2, "0")}
-            </span>
-          ) : audioUrl ? (
-            t.rerecord
-          ) : (
-            t.record
-          )}
-        </button>
-      </div>
-
-      {audioUrl && (
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
-          <audio controls src={audioUrl} className="h-9 w-full max-w-xs" />
+        {!disableAudioRecording && (
           <button
             type="button"
-            onClick={handleDelete}
-            className="text-muted-foreground transition-colors hover:text-destructive"
-            aria-label="Delete recording"
+            onClick={toggleRecording}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
+              recording
+                ? "border-destructive bg-destructive/10 text-destructive"
+                : "border-border bg-card text-foreground hover:bg-accent"
+            }`}
           >
-            <Trash2 className="h-4 w-4" />
+            {recording ? (
+              <span className="relative flex h-4 w-4 items-center justify-center" aria-hidden="true">
+                <span className="absolute h-3 w-3 animate-ping rounded-full bg-destructive/40" />
+                <span className="relative h-2.5 w-2.5 rounded-full bg-destructive" />
+              </span>
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
+            {recording ? (
+              <span aria-live="polite">
+                {t.stop} · {Math.floor(recordingSeconds / 60)}:
+                {String(recordingSeconds % 60).padStart(2, "0")}
+              </span>
+            ) : audioUrl ? (
+              t.rerecord
+            ) : (
+              t.record
+            )}
           </button>
+        )}
+      </div>
+
+      {recording && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-destructive animate-pulse" />
+          <span>{t.stopHint}</span>
+        </p>
+      )}
+
+      {!disableAudioRecording && audioUrl && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span>{t.done}</span>
+          </div>
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
+            <audio controls src={audioUrl} className="h-9 w-full max-w-xs" />
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="text-muted-foreground transition-colors hover:text-destructive p-1 rounded hover:bg-destructive/10"
+              aria-label="Delete recording"
+              title="Delete recording"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
