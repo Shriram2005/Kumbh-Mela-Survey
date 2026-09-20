@@ -220,20 +220,20 @@ export function VoiceInput({
   };
 
   return (
-    <div className="mt-4 space-y-3">
-      <div className="flex flex-wrap gap-2">
+    <div className="mt-5 space-y-4">
+      <div className="flex flex-wrap gap-3">
         {/* Hidden on iOS / Safari / unsupported devices, and hidden while recording or once audio is recorded */}
         {speechSupported && !audioUrl && !recording && (
           <button
             type="button"
             onClick={toggleDictation}
-            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
+            className={`inline-flex items-center gap-2.5 rounded-xl border-2 px-5 py-3 text-sm sm:text-base font-medium transition-all ${
               listening
-                ? "border-destructive bg-destructive/10 text-destructive"
-                : "border-border bg-card text-foreground hover:bg-accent"
+                ? "border-destructive bg-destructive/10 text-destructive shadow-md"
+                : "border-border bg-card text-foreground hover:bg-accent hover:border-primary/40 active:scale-[0.98]"
             }`}
           >
-            <Mic className="h-4 w-4" />
+            <Mic className="h-5 w-5" />
             {listening ? t.listening : t.voiceType}
           </button>
         )}
@@ -242,22 +242,22 @@ export function VoiceInput({
           <button
             type="button"
             onClick={toggleRecording}
-            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors ${
+            className={`inline-flex items-center gap-2.5 rounded-xl border-2 px-5 py-3 text-sm sm:text-base font-medium transition-all ${
               recording
-                ? "border-destructive bg-destructive/10 text-destructive"
-                : "border-border bg-card text-foreground hover:bg-accent"
+                ? "border-destructive bg-destructive/10 text-destructive shadow-md"
+                : "border-border bg-card text-foreground hover:bg-accent hover:border-primary/40 active:scale-[0.98]"
             }`}
           >
             {recording ? (
-              <span className="relative flex h-4 w-4 items-center justify-center" aria-hidden="true">
-                <span className="absolute h-3 w-3 animate-ping rounded-full bg-destructive/40" />
-                <span className="relative h-2.5 w-2.5 rounded-full bg-destructive" />
+              <span className="relative flex h-5 w-5 items-center justify-center" aria-hidden="true">
+                <span className="absolute h-4 w-4 animate-ping rounded-full bg-destructive/40" />
+                <span className="relative h-3 w-3 rounded-full bg-destructive" />
               </span>
             ) : (
-              <Play className="h-4 w-4" />
+              <Play className="h-5 w-5" />
             )}
             {recording ? (
-              <span aria-live="polite">
+              <span aria-live="polite" className="font-semibold">
                 {t.stop} · {Math.floor(recordingSeconds / 60)}:
                 {String(recordingSeconds % 60).padStart(2, "0")}
               </span>
@@ -271,34 +271,38 @@ export function VoiceInput({
       </div>
 
       {recording && (
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-destructive animate-pulse" />
-          <span>{t.stopHint}</span>
-        </p>
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-destructive animate-pulse" />
+          <p className="text-xs sm:text-sm text-foreground">{t.stopHint}</p>
+        </div>
       )}
 
       {!disableAudioRecording && audioUrl && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span>{t.done}</span>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 w-fit">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-xs sm:text-sm font-medium text-emerald-700 dark:text-emerald-400">{t.done}</span>
           </div>
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 p-3">
-            <audio controls src={audioUrl} className="h-9 w-full max-w-xs" />
+          <div className="flex items-center gap-3 rounded-xl border-2 border-border bg-card p-3 shadow-sm">
+            <audio controls src={audioUrl} className="h-10 w-full max-w-xs" />
             <button
               type="button"
               onClick={handleDelete}
-              className="text-muted-foreground transition-colors hover:text-destructive p-1 rounded hover:bg-destructive/10"
+              className="text-muted-foreground transition-colors hover:text-destructive p-2 rounded-lg hover:bg-destructive/10 shrink-0"
               aria-label="Delete recording"
               title="Delete recording"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-5 w-5" />
             </button>
           </div>
         </div>
       )}
 
-      {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
+      {notice && (
+        <div className="px-4 py-2.5 rounded-lg bg-muted/50 border border-border">
+          <p className="text-xs sm:text-sm text-muted-foreground">{notice}</p>
+        </div>
+      )}
     </div>
   );
 }

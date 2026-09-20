@@ -329,36 +329,41 @@ function SurveyPage() {
   if (!lang) {
     return (
       <Shell>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="h-2.5 w-full bg-primary/80" />
-          <div className="p-5 sm:p-8">
-            <h1 className="text-xl font-medium text-foreground sm:text-3xl">
-              Kumbh Mela Visitor Survey
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              कुंभ मेला सर्वेक्षण · कुंभमेळा सर्वेक्षण
-            </p>
-            <div className="mt-6 border-t border-border pt-6">
-              <p className="text-base text-foreground">Choose your language</p>
-              <div className="mt-4 space-y-3">
-                {LANGUAGES.map((l) => (
-                  <button
-                    key={l.code}
-                    type="button"
-                    onClick={() => setLang(l.code)}
-                    className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 text-left text-base transition-colors hover:border-primary hover:bg-accent"
-                  >
-                    <span>
-                      {l.native}
-                      <span className="ml-2 text-sm text-muted-foreground">{l.label}</span>
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+        <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+            Kumbh Mela Visitor Survey
+          </h1>
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground">
+            कुंभ मेला सर्वेक्षण · कुंभमेळा सर्वेक्षण
+          </p>
         </div>
+        
+        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <p className="text-center text-sm sm:text-base font-medium text-foreground mb-4">
+            Choose your language · अपनी भाषा चुनें · तुमची भाषा निवडा
+          </p>
+          {LANGUAGES.map((l) => (
+            <button
+              key={l.code}
+              type="button"
+              onClick={() => setLang(l.code)}
+              className="w-full flex items-center justify-between rounded-xl border-2 border-border bg-card px-6 py-5 text-left transition-all hover:border-primary hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <span className="flex items-center gap-3">
+                <span className="text-2xl">🌐</span>
+                <span>
+                  <span className="block text-lg font-semibold text-foreground">{l.native}</span>
+                  <span className="block text-sm text-muted-foreground">{l.label}</span>
+                </span>
+              </span>
+              <ChevronRight className="h-6 w-6 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
+        
+        <p className="mt-8 text-center text-xs text-muted-foreground">
+          Your feedback helps improve the experience for millions of pilgrims
+        </p>
       </Shell>
     );
   }
@@ -366,24 +371,24 @@ function SurveyPage() {
   if (submitted) {
     return (
       <Shell>
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-          <div className="h-2.5 w-full bg-primary/80" />
-          <div className="p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Check className="h-5 w-5" />
-              </span>
-              <h1 className="text-xl font-medium text-foreground">{t.thanks}</h1>
-            </div>
-            <p className="mt-3 text-sm text-muted-foreground">{t.thanksBody}</p>
-            <button
-              type="button"
-              onClick={restart}
-              className="mt-6 text-sm font-medium text-primary underline-offset-4 hover:underline"
-            >
-              {t.another}
-            </button>
+        <div className="text-center py-8 animate-in fade-in zoom-in duration-500">
+          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6">
+            <Check className="h-10 w-10" />
           </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+            {t.thanks}
+          </h1>
+          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto">
+            {t.thanksBody}
+          </p>
+          <button
+            type="button"
+            onClick={restart}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-medium text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all active:scale-[0.97]"
+          >
+            <span>{t.another}</span>
+            <ChevronRight className="h-5 w-5" />
+          </button>
         </div>
       </Shell>
     );
@@ -400,363 +405,391 @@ function SurveyPage() {
 
   return (
     <Shell>
-      {/* Sticky Progress Header Card */}
-      <div className="sticky top-4 z-20 mb-6 overflow-hidden rounded-xl border border-border bg-card shadow-sm backdrop-blur-md">
-        <div className="h-2.5 w-full bg-muted">
-          <div
-            className="h-full bg-primary/80 transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <div className="flex items-center justify-between px-5 py-3 sm:px-6">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t.question} {step + 1} {t.of} {total}
-          </p>
-          <button
-            type="button"
-            onClick={() => setLang(null)}
-            className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
-            title={t.chooseLang}
-          >
-            <span>{LANGUAGES.find((l) => l.code === lang)?.native}</span>
-            <span className="text-[10px]">🌐</span>
-          </button>
+      {/* Simple Progress Bar at Top */}
+      <div className="sticky top-0 z-30 -mx-4 -mt-8 mb-6 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-4 sm:py-5">
+        <div className="mx-auto w-full max-w-2xl">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-muted-foreground">
+              {step + 1} {t.of} {total}
+            </p>
+            <button
+              type="button"
+              onClick={() => setLang(null)}
+              className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
+              title={t.chooseLang}
+            >
+              <span>🌐</span>
+              <span>{LANGUAGES.find((l) => l.code === lang)?.native}</span>
+            </button>
+          </div>
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Conversational Question & Answer Stream */}
-      <div className="space-y-6">
+      {/* Chat-like Conversation Flow */}
+      <div className="space-y-4 sm:space-y-5">
         {QUESTIONS.slice(0, step + 1).map((q, idx) => {
           const ans = answers[q.id];
           const isActive = idx === step;
 
+          // Previous questions show as completed chat messages
           if (!isActive) {
             return (
-              <div key={q.id} className="space-y-3">
-                {/* Question Card - Aligned LEFT */}
-                <div className="mr-auto max-w-[88%] sm:max-w-[80%] rounded-xl border border-border bg-card p-4 sm:p-5 shadow-sm transition-all hover:border-primary/40">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      {t.question} {idx + 1}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setStep(idx)}
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      {t.back}
-                    </button>
+              <div key={q.id} className="space-y-3 animate-in fade-in duration-300">
+                {/* Question Bubble - Left Aligned */}
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] sm:max-w-[75%]">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-2xl rounded-br-2xl bg-muted/60 border border-border/40">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Q{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setStep(idx)}
+                        className="text-[10px] font-medium text-primary hover:underline"
+                        aria-label={`Edit question ${idx + 1}`}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <div className="mt-1 px-4 py-3 rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm">
+                      <p className="text-sm sm:text-base leading-relaxed text-foreground">
+                        {q.label[lang]}
+                      </p>
+                    </div>
                   </div>
-                  <h2 className="text-sm font-medium text-foreground sm:text-base">
-                    {q.label[lang]}
-                  </h2>
                 </div>
 
-                {/* User Answer Card - Aligned RIGHT */}
-                <div className="ml-auto max-w-[88%] sm:max-w-[80%] rounded-xl border border-primary/20 bg-primary/5 p-4 sm:p-5 shadow-sm text-right">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-primary/70 mb-1">
-                    {t.yourAnswer}
-                  </p>
-                  {ans?.text ? (
-                    <p className="text-sm sm:text-base font-medium text-foreground whitespace-pre-line">
-                      {ans.text}
-                    </p>
-                  ) : null}
-                  {ans?.audioUrl ? (
-                    <div className="mt-2 flex items-center justify-end gap-2 text-xs font-medium text-primary">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-primary">
-                        🎙️ {t.done}
-                      </span>
-                      <audio src={ans.audioUrl} controls className="h-8 max-w-[200px]" />
+                {/* Answer Bubble - Right Aligned */}
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] sm:max-w-[75%]">
+                    <div className="px-4 py-3 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-sm">
+                      {ans?.text ? (
+                        <p className="text-sm sm:text-base leading-relaxed whitespace-pre-line break-words">
+                          {ans.text}
+                        </p>
+                      ) : null}
+                      {ans?.audioUrl && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-xs">🎙️</span>
+                          <audio src={ans.audioUrl} controls className="h-8 max-w-[180px]" />
+                        </div>
+                      )}
+                      {ans?.fileUrl && (
+                        <div className="mt-2 flex items-center gap-2 text-xs">
+                          <span>📎</span>
+                          <span className="truncate">{ans.fileName || t.fileAttached}</span>
+                        </div>
+                      )}
+                      {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (
+                        <p className="text-sm italic opacity-70">—</p>
+                      )}
                     </div>
-                  ) : null}
-                  {ans?.fileUrl ? (
-                    <div className="mt-2 flex items-center justify-end gap-2 text-xs font-medium text-primary">
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-primary">
-                        📎 {ans.fileName || t.fileAttached}
-                      </span>
-                    </div>
-                  ) : null}
-                  {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (
-                    <p className="text-sm italic text-muted-foreground">—</p>
-                  )}
+                  </div>
                 </div>
               </div>
             );
           }
 
+          // Active Question - Large, centered, easy to focus
           return (
             <div
               key={q.id}
               ref={activeQuestionRef}
-              className="overflow-hidden rounded-xl border border-border bg-card shadow-md transition-all ring-1 ring-primary/20"
+              className="animate-in fade-in slide-in-from-bottom-4 duration-500"
             >
-              <div className="h-1.5 w-full bg-primary/80" />
-              <div className="p-5 sm:p-8">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {t.question} {step + 1} {t.of} {total}
-                  </p>
-                  {isTypingQuestion ? (
-                    <span className="text-xs font-medium text-muted-foreground/80 bg-muted px-2 py-0.5 rounded">
+              {/* Question Bubble */}
+              <div className="mb-5">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-2xl rounded-br-2xl bg-muted/60 border border-border/40">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Question {step + 1} {t.of} {total}
+                  </span>
+                  {isTypingQuestion && (
+                    <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted/50">
                       {t.optional}
                     </span>
-                  ) : null}
-                </div>
-                <h1 className="mt-3 text-lg font-medium leading-snug text-foreground sm:text-xl">
-                  {q.label[lang]}
-                  {!isTypingQuestion && (
-                    <span className="text-destructive font-semibold ml-1" title={t.required}>*</span>
                   )}
-                </h1>
+                </div>
+                <div className="mt-1 px-5 py-4 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-card border-2 border-primary/20 shadow-lg">
+                  <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
+                    {q.label[lang]}
+                    {!isTypingQuestion && (
+                      <span className="text-destructive ml-1" title={t.required}>*</span>
+                    )}
+                  </h1>
+                </div>
+              </div>
 
-                <div className="mt-5">
-                  {q.type === "text" && !hasAudioAnswer && (
+              {/* Answer Input Area */}
+              <div className="px-1">
+                {q.type === "text" && !hasAudioAnswer && (
+                  <div className="space-y-2">
+                    <label className="sr-only">{t.yourAnswer}</label>
                     <input
                       value={current.text}
                       onChange={(e) => update({ text: e.target.value })}
                       placeholder={t.yourAnswer}
-                      className="w-full border-b border-border bg-transparent pb-2 text-base outline-none transition-colors focus:border-primary"
+                      className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                      autoFocus
                     />
-                  )}
+                  </div>
+                )}
 
-                  {q.type === "longtext" && !hasAudioAnswer && (
+                {q.type === "longtext" && !hasAudioAnswer && (
+                  <div className="space-y-2">
+                    <label className="sr-only">{t.yourAnswer}</label>
                     <textarea
                       value={current.text}
                       onChange={(e) => update({ text: e.target.value })}
                       placeholder={t.yourAnswer}
-                      rows={4}
-                      className="w-full resize-none rounded-lg border border-border bg-transparent p-3 text-base outline-none transition-colors focus:border-primary"
+                      rows={5}
+                      className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
+                      autoFocus
                     />
-                  )}
+                  </div>
+                )}
 
-                  {q.type === "rating" && (
-                    <div className="flex flex-wrap gap-2">
-                      {[1, 2, 3, 4, 5].map((n) => (
+                {q.type === "rating" && (
+                  <div className="flex flex-wrap gap-3 justify-center">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => update({ text: String(n) })}
+                        className={`h-16 w-16 sm:h-20 sm:w-20 rounded-2xl text-xl sm:text-2xl font-semibold transition-all ${
+                          current.text === String(n)
+                            ? "bg-primary text-primary-foreground shadow-lg scale-110 border-2 border-primary"
+                            : "bg-card border-2 border-border hover:border-primary/40 hover:scale-105 hover:shadow-md active:scale-95"
+                        }`}
+                        aria-label={`Rating ${n} out of 5`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Single Choice (Radio) - Big Touch Targets */}
+                {q.type === "choice" && (
+                  <div className="space-y-3">
+                    {q.options![lang].map((opt, optIdx) => {
+                      const isYesOption = optIdx === 0;
+                      const isSelected =
+                        current.choice === opt ||
+                        current.text === opt ||
+                        Boolean(isYesOption && current.text?.startsWith(opt + " - "));
+                      return (
                         <button
-                          key={n}
+                          key={opt}
                           type="button"
-                          onClick={() => update({ text: String(n) })}
-                          className={`h-12 w-12 rounded-full border text-base transition-colors ${
-                            current.text === String(n)
-                              ? "border-primary bg-primary text-primary-foreground font-medium"
-                              : "border-border hover:bg-accent"
+                          onClick={() => {
+                            if (q.id === "medical_needed") {
+                              if (isYesOption) {
+                                const details = current.details ?? "";
+                                update({
+                                  choice: opt,
+                                  details,
+                                  text: details.trim() ? `${opt} - ${details.trim()}` : opt,
+                                });
+                              } else {
+                                update({
+                                  choice: opt,
+                                  details: "",
+                                  text: opt,
+                                });
+                              }
+                            } else {
+                              update({ text: opt });
+                            }
+                          }}
+                          className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/10 shadow-md"
+                              : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
                           }`}
                         >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Single Choice (Radio) */}
-                  {q.type === "choice" && (
-                    <div className="space-y-2">
-                      {q.options![lang].map((opt, optIdx) => {
-                        const isYesOption = optIdx === 0;
-                        const isSelected =
-                          current.choice === opt ||
-                          current.text === opt ||
-                          Boolean(isYesOption && current.text?.startsWith(opt + " - "));
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                              if (q.id === "medical_needed") {
-                                if (isYesOption) {
-                                  const details = current.details ?? "";
-                                  update({
-                                    choice: opt,
-                                    details,
-                                    text: details.trim() ? `${opt} - ${details.trim()}` : opt,
-                                  });
-                                } else {
-                                  update({
-                                    choice: opt,
-                                    details: "",
-                                    text: opt,
-                                  });
-                                }
-                              } else {
-                                update({ text: opt });
-                              }
-                            }}
-                            className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors ${
+                          <span
+                            className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${
                               isSelected
-                                ? "border-primary bg-primary/5 font-medium"
-                                : "border-border hover:bg-accent"
+                                ? "border-primary bg-primary"
+                                : "border-muted-foreground/40"
                             }`}
                           >
-                            <span
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
-                                isSelected ? "border-primary" : "border-muted-foreground"
-                              }`}
-                            >
-                              {isSelected && (
-                                <span className="h-2 w-2 rounded-full bg-primary" />
-                              )}
-                            </span>
-                            {opt}
-                          </button>
-                        );
-                      })}
+                            {isSelected && (
+                              <span className="h-3 w-3 rounded-full bg-primary-foreground" />
+                            )}
+                          </span>
+                          <span className={isSelected ? "font-medium" : ""}>{opt}</span>
+                        </button>
+                      );
+                    })}
 
-                      {/* Q9 conditional input field if Yes is selected */}
-                      {q.id === "medical_needed" &&
-                        (current.choice === q.options![lang][0] ||
-                          current.text === q.options![lang][0] ||
-                          Boolean(current.text?.startsWith(q.options![lang][0] + " - "))) && (
-                          <div className="mt-3 pt-3 border-t border-border">
-                            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                              {t.specifyMedical}
-                            </label>
-                            <input
-                              value={
-                                current.details ??
-                                (current.text && current.text.includes(" - ")
-                                  ? current.text.split(" - ").slice(1).join(" - ")
-                                  : "")
-                              }
-                              onChange={(e) => {
-                                const details = e.target.value;
-                                const choice = q.options?.[lang]?.[0] ?? "Yes";
-                                const formatted: string = details.trim()
-                                  ? `${choice} - ${details.trim()}`
-                                  : choice;
-                                update({
-                                  choice,
-                                  details,
-                                  text: formatted,
-                                });
-                              }}
-                              placeholder={t.specifyMedical}
-                              className="w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-                              autoFocus
-                            />
-                          </div>
-                        )}
-                    </div>
-                  )}
-
-                  {/* Multi-select Checkboxes for Q4, Q5, Q15 */}
-                  {q.type === "checkbox" && (
-                    <div className="space-y-2">
-                      {q.options![lang].map((opt) => {
-                        const selectedList = current.text
-                          ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
-                          : [];
-                        const isChecked = selectedList.includes(opt);
-                        return (
-                          <button
-                            key={opt}
-                            type="button"
-                            onClick={() => {
-                              const nextList = isChecked
-                                ? selectedList.filter((s) => s !== opt)
-                                : [...selectedList, opt];
-                              update({ text: nextList.join(", ") });
+                    {/* Q9 conditional input field if Yes is selected */}
+                    {q.id === "medical_needed" &&
+                      (current.choice === q.options![lang][0] ||
+                        current.text === q.options![lang][0] ||
+                        Boolean(current.text?.startsWith(q.options![lang][0] + " - "))) && (
+                        <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border">
+                          <label className="block text-sm font-medium text-foreground mb-2">
+                            {t.specifyMedical}
+                          </label>
+                          <input
+                            value={
+                              current.details ??
+                              (current.text && current.text.includes(" - ")
+                                ? current.text.split(" - ").slice(1).join(" - ")
+                                : "")
+                            }
+                            onChange={(e) => {
+                              const details = e.target.value;
+                              const choice = q.options?.[lang]?.[0] ?? "Yes";
+                              const formatted: string = details.trim()
+                                ? `${choice} - ${details.trim()}`
+                                : choice;
+                              update({
+                                choice,
+                                details,
+                                text: formatted,
+                              });
                             }}
-                            className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors ${
+                            placeholder={t.specifyMedical}
+                            className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
+                            autoFocus
+                          />
+                        </div>
+                      )}
+                  </div>
+                )}
+
+                {/* Multi-select Checkboxes - Big Touch Targets */}
+                {q.type === "checkbox" && (
+                  <div className="space-y-3">
+                    {q.options![lang].map((opt) => {
+                      const selectedList = current.text
+                        ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
+                        : [];
+                      const isChecked = selectedList.includes(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => {
+                            const nextList = isChecked
+                              ? selectedList.filter((s) => s !== opt)
+                              : [...selectedList, opt];
+                            update({ text: nextList.join(", ") });
+                          }}
+                          className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
+                            isChecked
+                              ? "border-primary bg-primary/10 shadow-md"
+                              : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
+                          }`}
+                        >
+                          <span
+                            className={`flex-shrink-0 h-6 w-6 rounded border-2 flex items-center justify-center transition-all ${
                               isChecked
-                                ? "border-primary bg-primary/5 font-medium"
-                                : "border-border hover:bg-accent"
+                                ? "border-primary bg-primary"
+                                : "border-muted-foreground/40"
                             }`}
                           >
-                            <span
-                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                                isChecked
-                                  ? "border-primary bg-primary text-primary-foreground"
-                                  : "border-muted-foreground"
-                              }`}
-                            >
-                              {isChecked && <Check className="h-3 w-3 stroke-[3]" />}
-                            </span>
-                            {opt}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                            {isChecked && (
+                              <Check className="h-4 w-4 stroke-[3] text-primary-foreground" />
+                            )}
+                          </span>
+                          <span className={isChecked ? "font-medium" : ""}>{opt}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-                  {/* Final Question: Feedback Text + Simple File Upload */}
-                  {q.type === "file_text" && (
-                    <div className="space-y-4">
-                      {!hasAudioAnswer && (
+                {/* Final Question: Feedback Text + Simple File Upload */}
+                {q.type === "file_text" && (
+                  <div className="space-y-4">
+                    {!hasAudioAnswer && (
+                      <div className="space-y-2">
+                        <label className="sr-only">{t.yourAnswer}</label>
                         <textarea
                           value={current.text}
                           onChange={(e) => update({ text: e.target.value })}
                           placeholder={t.yourAnswer}
-                          rows={4}
-                          className="w-full resize-none rounded-lg border border-border bg-transparent p-3 text-base outline-none transition-colors focus:border-primary"
+                          rows={5}
+                          className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
+                          autoFocus
                         />
-                      )}
-
-                      <div>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                          onChange={handleFileChange}
-                          className="hidden"
-                          id="survey-file-upload"
-                        />
-                        {!current.fileUrl ? (
-                          <label
-                            htmlFor="survey-file-upload"
-                            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-5 text-center cursor-pointer transition-colors hover:border-primary/60 hover:bg-accent/40"
-                          >
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                              <Upload className="h-5 w-5" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-foreground">{t.uploadFile}</p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">{t.uploadHint}</p>
-                            </div>
-                          </label>
-                        ) : (
-                          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 shadow-sm">
-                            <div className="flex items-center gap-3 min-w-0">
-                              {current.fileType?.startsWith("image/") ? (
-                                <img
-                                  src={current.fileUrl}
-                                  alt="Preview"
-                                  className="h-12 w-12 rounded object-cover border border-border shrink-0"
-                                />
-                              ) : current.fileType?.startsWith("video/") ? (
-                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
-                                  <Film className="h-6 w-6" />
-                                </div>
-                              ) : (
-                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                                  <Paperclip className="h-6 w-6" />
-                                </div>
-                              )}
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">
-                                  {current.fileName || t.fileAttached}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {current.fileType || t.fileAttached}
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveFile}
-                              className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
-                              title={t.removeFile}
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
 
-                {/* Voice input: available for text, longtext, and file_text */}
+                    <div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id="survey-file-upload"
+                      />
+                      {!current.fileUrl ? (
+                        <label
+                          htmlFor="survey-file-upload"
+                          className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:bg-accent/30 active:scale-[0.98]"
+                        >
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <Upload className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <p className="text-sm sm:text-base font-medium text-foreground">{t.uploadFile}</p>
+                            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">{t.uploadHint}</p>
+                          </div>
+                        </label>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-card p-3 shadow-sm">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {current.fileType?.startsWith("image/") ? (
+                              <img
+                                src={current.fileUrl}
+                                alt="Preview"
+                                className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
+                              />
+                            ) : current.fileType?.startsWith("video/") ? (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <Film className="h-7 w-7" />
+                              </div>
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <Paperclip className="h-7 w-7" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">
+                                {current.fileName || t.fileAttached}
+                              </p>
+                              <p className="text-xs text-muted-foreground truncate">
+                                {current.fileType || t.fileAttached}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveFile}
+                            className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                            title={t.removeFile}
+                            aria-label={t.removeFile}
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Voice Input */}
                 <VoiceInput
                   lang={lang}
                   questionType={q.type}
@@ -770,7 +803,6 @@ function SurveyPage() {
                   onAudio={(blob, previewUrl) => {
                     if (blob && previewUrl) {
                       audioBlobsRef.current[q.id] = blob;
-                      // When audio is recorded, clear text for this question
                       update({ text: "", audioUrl: previewUrl });
                     } else {
                       delete audioBlobsRef.current[q.id];
@@ -786,25 +818,32 @@ function SurveyPage() {
                   }}
                 />
 
-                {error && <p className="mt-4 text-sm text-destructive">{t.required}</p>}
+                {/* Error Message */}
+                {error && (
+                  <div className="mt-4 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <p className="text-sm font-medium text-destructive">{t.required}</p>
+                  </div>
+                )}
 
-                <div className="mt-8 flex items-center justify-between gap-3 border-t border-border pt-5">
+                {/* Navigation Buttons */}
+                <div className="mt-6 flex items-center gap-3">
                   <button
                     type="button"
                     onClick={handleBack}
-                    className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-sm text-primary transition-colors hover:bg-accent"
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium text-foreground bg-card border-2 border-border transition-all hover:bg-accent hover:border-primary/40 active:scale-[0.97]"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                    {t.back}
+                    <ChevronLeft className="h-5 w-5" />
+                    <span>{t.back}</span>
                   </button>
                   <button
                     type="button"
                     onClick={goNext}
                     disabled={submitting}
-                    className="inline-flex items-center gap-2 rounded-md bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-70"
+                    className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
                   >
-                    {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                    {step === total - 1 ? t.submit : t.next}
+                    {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
+                    <span>{step === total - 1 ? t.submit : t.next}</span>
+                    {!submitting && step < total - 1 && <ChevronRight className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
@@ -813,9 +852,12 @@ function SurveyPage() {
         })}
       </div>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        {LANGUAGES.find((l) => l.code === lang)?.native} · {step + 1}/{total}
-      </p>
+      {/* Progress Indicator at Bottom */}
+      <div className="mt-8 text-center">
+        <p className="text-xs text-muted-foreground">
+          {LANGUAGES.find((l) => l.code === lang)?.native} · {step + 1}/{total}
+        </p>
+      </div>
     </Shell>
   );
 }
