@@ -22,7 +22,7 @@ import {
   type Lang,
 } from "@/lib/survey";
 import { uploadAudioToS3, uploadFileToS3 } from "@/lib/s3";
-import { saveDraft, loadDraft, clearDraft } from "@/lib/draft";
+import { saveDraft, loadDraft, clearDraft, markAsSubmitted, hasSubmitted, clearSubmissionStatus } from "@/lib/draft";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -66,6 +66,13 @@ function SurveyPage() {
   // Restore draft on mount if one exists
   useEffect(() => {
     let active = true;
+    
+    // Check if user has already submitted
+    if (hasSubmitted()) {
+      setSubmitted(true);
+      return;
+    }
+    
     loadDraft().then((draft) => {
       if (!active || !draft || !draft.lang || draftRestoredRef.current) return;
       draftRestoredRef.current = true;
@@ -280,6 +287,9 @@ function SurveyPage() {
           answers: finalAnswers,
         });
 
+        // Mark survey as submitted to prevent resubmission
+        markAsSubmitted();
+
         // Clear saved draft from device storage
         await clearDraft();
 
@@ -308,6 +318,7 @@ function SurveyPage() {
 
   const restart = () => {
     clearDraft();
+    clearSubmissionStatus();
     draftRestoredRef.current = false;
     Object.values(answers).forEach((a) => {
       if (a.audioUrl && a.audioUrl.startsWith("blob:")) {

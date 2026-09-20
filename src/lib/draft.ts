@@ -13,6 +13,7 @@ export interface SurveyDraft {
 const DB_NAME = "kumbh_survey_db";
 const STORE_NAME = "draft";
 const DRAFT_KEY = "current_draft";
+const SUBMISSION_KEY = "kumbh_survey_submitted"; // localStorage key for submission status
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -91,4 +92,44 @@ export async function clearDraft(): Promise<void> {
   try {
     localStorage.removeItem("kumbh_survey_draft_text");
   } catch {}
+}
+
+/**
+ * Marks the survey as submitted in localStorage.
+ * This prevents users from submitting multiple times.
+ */
+export function markAsSubmitted(): void {
+  try {
+    localStorage.setItem(SUBMISSION_KEY, JSON.stringify({
+      submitted: true,
+      timestamp: Date.now(),
+    }));
+  } catch (err) {
+    console.error("Failed to mark survey as submitted:", err);
+  }
+}
+
+/**
+ * Checks if the user has already submitted the survey.
+ */
+export function hasSubmitted(): boolean {
+  try {
+    const data = localStorage.getItem(SUBMISSION_KEY);
+    if (!data) return false;
+    const parsed = JSON.parse(data);
+    return Boolean(parsed.submitted);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Clears the submission status (for testing or allowing resubmission).
+ */
+export function clearSubmissionStatus(): void {
+  try {
+    localStorage.removeItem(SUBMISSION_KEY);
+  } catch (err) {
+    console.error("Failed to clear submission status:", err);
+  }
 }
