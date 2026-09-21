@@ -49,7 +49,7 @@ function SurveyPage() {
   const [showIntro, setShowIntro] = useState(false);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -170,7 +170,7 @@ function SurveyPage() {
       ...prev,
       [question.id]: { ...(prev[question.id] ?? { text: "" }), ...patch },
     }));
-    setError(false);
+    setError(null);
   };
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
@@ -208,16 +208,45 @@ function SurveyPage() {
   };
 
   const goNext = async () => {
-    // Only typing questions are optional; choice and checkbox questions are required like before
+    // Phone validation — optional but must be valid if filled
+    if (question.id === "phone") {
+      const phone = current.text?.trim() ?? "";
+      if (phone.length > 0) {
+        // Strip formatting chars for digit count check
+        const digits = phone.replace(/[^\d]/g, "");
+        if (digits.length < 7 || digits.length > 15) {
+          const msg =
+            lang === "hi"
+              ? "कृपया एक मान्य फ़ोन नंबर दर्ज करें (7–15 अंक)"
+              : lang === "mr"
+              ? "कृपया वैध फोन नंबर प्रविष्ट करा (7–15 अंक)"
+              : "Please enter a valid phone number (7–15 digits)";
+          setError(msg);
+          return;
+        }
+      }
+      // Phone is optional — valid empty or valid number → proceed
+      setError(null);
+      setStep((s) => s + 1);
+      return;
+    }
+
+    // Only typing questions are optional; choice and checkbox questions are required
     if (!isTypingQuestion) {
       const hasText = Boolean(current.text?.trim());
       const hasAudio = Boolean(current.audioUrl);
       if (!hasText && !hasAudio) {
-        setError(true);
+        setError(
+          lang === "hi"
+            ? "यह प्रश्न आवश्यक है"
+            : lang === "mr"
+            ? "हा प्रश्न आवश्यक आहे"
+            : "This question is required"
+        );
         return;
       }
     }
-    setError(false);
+    setError(null);
 
     if (step === total - 1) {
       setSubmitting(true);
@@ -343,10 +372,10 @@ function SurveyPage() {
       <Shell>
         <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
-            Kumbh Mela Visitor Survey
+            Kumbh Mela – Experience and Suggestions Form
           </h1>
           <p className="mt-2 text-sm sm:text-base text-muted-foreground">
-            कुंभ मेला सर्वेक्षण · कुंभमेळा सर्वेक्षण
+            कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म
           </p>
         </div>
         
@@ -383,75 +412,96 @@ function SurveyPage() {
   if (showIntro && lang) {
     const introContent = {
       en: {
-        headline: "Your voice shapes the next Kumbh Mela 🙏",
-        body: "You attended one of the world's largest gatherings. Your experience is invaluable in planning better facilities for the upcoming Nashik Kumbh Mela.",
+        greeting: "Dear Sir/Madam,",
+        body: "We are collecting information from people who have previously visited or experienced the Kumbh Mela to understand their experiences, challenges, and expectations.\n\nIf you have previously attended the Kumbh Mela, kindly fill out this form and share your experience.",
         bullets: [
-          "Takes only 3\u20135 minutes",
-          "Helps improve safety, sanitation & services",
-          "Your responses are anonymous",
+          "Your responses will help us understand the experiences of pilgrims and visitors.",
+          "The collected information will support the study and planning of better facilities and services for the upcoming Nashik Kumbh Mela.",
+          "If you know anyone who has previously attended the Kumbh Mela, kindly share this QR code/form link with your friends, relatives, neighbours, and other contacts.",
+          "Please provide accurate information based on your own experience.",
+          "Your participation is valuable and will contribute to better understanding and planning for future Kumbh Mela events.",
         ],
+        closing: "Thank you for your valuable participation and support.",
         cta: "Start Survey",
+        changeLang: "Change language",
       },
       hi: {
-        headline: "आपकी आवाज़ अगले कुंभमेले को बेहतर बनाएगी 🙏",
-        body: "\u0906\u092a\u0928\u0947 \u0926\u0941\u0928\u093f\u092f\u093e \u0915\u0947 \u0938\u092c\u0938\u0947 \u092c\u095c\u0947 \u0906\u092f\u094b\u091c\u0928\u094b\u0902 \u092e\u0947\u0902 \u0938\u0947 \u090f\u0915 \u092e\u0947\u0902 \u092d\u093e\u0917 \u0932\u093f\u092f\u093e \u0939\u0948\u0964 \u0906\u092a\u0915\u093e \u0905\u0928\u0941\u092d\u0935 \u0906\u0917\u093e\u092e\u0940 \u0928\u093e\u0938\u093f\u0915 \u0915\u0941\u0902\u092d\u092e\u0947\u0932\u0947 \u0915\u0940 \u092c\u0947\u0939\u0924\u0930 \u0938\u0941\u0935\u093f\u0927\u093e\u0913\u0902 \u0915\u0940 \u092f\u094b\u091c\u0928\u093e \u092e\u0947\u0902 \u0905\u092e\u0942\u0932\u094d\u092f \u0938\u0939\u092f\u094b\u0917 \u0926\u0947\u0917\u093e\u0964",
+        greeting: "प्रिय महोदय / महोदया,",
+        body: "हम उन लोगों से जानकारी एकत्र कर रहे हैं जिन्होंने पूर्व में कुंभ मेले में भाग लिया है या कुंभ मेले का अनुभव लिया है, ताकि उनके अनुभव, समस्याओं और अपेक्षाओं को समझा जा सके।\n\nयदि आपने पहले कुंभ मेले में भाग लिया है, तो कृपया इस फ़ॉर्म को भरकर अपना अनुभव साझा करें।",
         bullets: [
-          "\u0938\u093f\u0930\u094d\u092b\u093c 3\u20135 \u092e\u093f\u0928\u091f \u0932\u0917\u0924\u0947 \u0939\u0948\u0902",
-          "\u0938\u0941\u0930\u0915\u094d\u0937\u093e, \u0938\u094d\u0935\u091a\u094d\u091b\u0924\u093e \u0914\u0930 \u0938\u0947\u0935\u093e\u0913\u0902 \u0915\u094b \u092c\u0947\u0939\u0924\u0930 \u092c\u0928\u093e\u0928\u0947 \u092e\u0947\u0902 \u092e\u0926\u0926 \u0915\u0930\u0924\u093e \u0939\u0948",
-          "\u0906\u092a\u0915\u0940 \u092a\u094d\u0930\u0924\u093f\u0915\u094d\u0930\u093f\u092f\u093e\u090f\u0901 \u0917\u0941\u092e\u0928\u093e\u092e \u0939\u0948\u0902",
+          "आपकी प्रतिक्रिया से तीर्थयात्रियों एवं आगंतुकों के अनुभवों को समझने में सहायता मिलेगी।",
+          "एकत्रित जानकारी आगामी नासिक कुंभ मेले के लिए बेहतर सुविधाओं एवं सेवाओं के अध्ययन और योजना में सहायक होगी।",
+          "यदि आप ऐसे किसी व्यक्ति को जानते हैं जिसने पूर्व में कुंभ मेले में भाग लिया है, तो कृपया यह QR Code/Form Link अपने मित्रों, रिश्तेदारों, पड़ोसियों एवं अन्य परिचितों के साथ साझा करें।",
+          "कृपया अपने स्वयं के अनुभव के आधार पर सही एवं सटीक जानकारी प्रदान करें।",
+          "आपकी सहभागिता भविष्य के कुंभ मेले की बेहतर समझ एवं योजना बनाने में महत्वपूर्ण योगदान देगी।",
         ],
-        cta: "\u0938\u0930\u094d\u0935\u0947\u0915\u094d\u0937\u0923 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902",
+        closing: "आपकी मूल्यवान सहभागिता एवं सहयोग के लिए धन्यवाद।",
+        cta: "सर्वेक्षण शुरू करें",
+        changeLang: "भाषा बदलें",
       },
       mr: {
-        headline: "तुमचा अनुभव पुढील कुंभमेळाला आकार देईल 🙏",
-        body: "\u0924\u0941\u092e\u094d\u0939\u0940 \u091c\u0917\u093e\u0924\u0940\u0932 \u0938\u0930\u094d\u0935\u093e\u0924 \u092e\u094b\u0920\u094d\u092f\u093e \u092e\u0947\u0933\u093e\u0935\u093e\u0902\u092a\u0948\u0915\u0940 \u090f\u0915\u093e\u0924 \u0938\u0939\u092d\u093e\u0917\u0940 \u091d\u093e\u0932\u093e\u0924. \u0924\u0941\u092e\u091a\u093e \u0905\u0928\u0941\u092d\u0935 \u0906\u0917\u093e\u092e\u0940 \u0928\u093e\u0936\u093f\u0915 \u0915\u0941\u0902\u092d\u092e\u0947\u0933\u094d\u092f\u093e\u0938\u093e\u0920\u0940 \u091a\u093e\u0902\u0917\u0932\u094d\u092f\u093e \u0938\u0941\u0935\u093f\u0927\u093e \u0906\u0916\u0923\u094d\u092f\u093e\u0938 \u092e\u0926\u0924 \u0915\u0930\u0947\u0932.",
+        greeting: "प्रिय महोदय / महोदया,",
+        body: "आम्ही अशा व्यक्तींकडून माहिती गोळा करत आहोत ज्यांनी यापूर्वी कुंभमेळ्यात सहभाग घेतला आहे किंवा कुंभमेळ्याचा अनुभव घेतला आहे, जेणेकरून त्यांचे अनुभव, अडचणी आणि अपेक्षा समजून घेता येतील.\n\nजर तुम्ही यापूर्वी कुंभमेळ्यात सहभागी झाला असाल, तर कृपया हा फॉर्म भरून आपला अनुभव नक्की शेअर करा.",
         bullets: [
-          "\u092b\u0915\u094d\u0924 3\u20135 \u092e\u093f\u0928\u093f\u091f\u0947 \u0932\u093e\u0917\u0924\u093e\u0924",
-          "\u0938\u0941\u0930\u0915\u094d\u0937\u093e, \u0938\u094d\u0935\u091a\u094d\u091b\u0924\u093e \u0906\u0923\u093f \u0938\u0947\u0935\u093e \u0938\u0941\u0927\u093e\u0930\u0923\u094d\u092f\u093e\u0938 \u092e\u0926\u0924 \u0939\u094b\u0924\u0947",
-          "\u0924\u0941\u092e\u091a\u0940 \u092e\u093e\u0939\u093f\u0924\u0940 \u0917\u094b\u092a\u0928\u0940\u092f \u0906\u0939\u0947",
+          "तुमच्या प्रतिसादांमुळे भाविक आणि पर्यटकांचे अनुभव समजून घेण्यास मदत होईल.",
+          "गोळा केलेली माहिती आगामी नासिक कुंभमेळ्यासाठी उत्तम सुविधा आणि सेवांचे नियोजन व अभ्यास करण्यासाठी उपयुक्त ठरेल.",
+          "जर तुम्ही अशा कोणाला ओळखत असाल ज्यांनी यापूर्वी कुंभमेळ्यात सहभाग घेतला आहे, तर कृपया हा QR Code / फॉर्म लिंक तुमच्या मित्रांसोबत, नातेवाईकांसोबत आणि परिचितांसोबत नक्की शेअर करा.",
+          "कृपया आपल्या स्वतःच्या अनुभवाच्या आधारे खरी आणि अचूक माहिती द्या.",
+          "तुमचा सहभाग भविष्यातील कुंभमेळ्याच्या उत्तम नियोजनात अत्यंत मोलाचे योगदान देईल.",
         ],
-        cta: "\u0938\u0930\u094d\u0935\u0947\u0915\u094d\u0937\u0923 \u0938\u0941\u0930\u0942 \u0915\u0930\u093e",
+        closing: "तुमच्या मौल्यवान सहभागाबद्दल आणि सहकार्याबद्दल मनापासून धन्यवाद.",
+        cta: "सर्वेक्षण सुरू करा",
+        changeLang: "भाषा बदला",
       },
     } as const;
     const intro = introContent[lang];
-    return (
+    return (    
       <Shell>
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-5">
-          {/* Headline */}
-          <div className="text-center pt-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary/70 mb-2">Kumbh Mela Survey</p>
-            <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">{intro.headline}</h1>
-          </div>
-
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-5 pb-4 pt-6">
           {/* Info card */}
-          <div className="rounded-2xl border border-border/60 bg-card/80 px-5 py-4 shadow-sm">
-            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{intro.body}</p>
-            <ul className="mt-3 space-y-2">
+          <div className="rounded-2xl border border-border/60 bg-card/85 px-6 py-7 sm:px-8 sm:py-8 shadow-sm">
+            {/* Greeting */}
+            <p className="text-base sm:text-xl font-bold text-foreground mb-4">{intro.greeting}</p>
+
+            {/* Body paragraphs */}
+            <div className="space-y-4 mb-6">
+              {intro.body.split("\n\n").map((para, i) => (
+                <p key={i} className="text-base sm:text-lg text-muted-foreground leading-relaxed">{para}</p>
+              ))}
+            </div>
+
+            {/* Bullet points */}
+            <ul className="space-y-3.5 mb-6">
               {intro.bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-foreground">
-                  <span className="text-primary font-bold shrink-0">✓</span>
+                <li key={i} className="flex items-start gap-3 text-base sm:text-lg text-foreground leading-relaxed">
+                  <span className="shrink-0 text-primary font-bold text-lg leading-none mt-1">→</span>
                   <span>{b}</span>
                 </li>
               ))}
             </ul>
+
+            {/* Divider */}
+            <div className="border-t border-border/60 pt-5">
+              <p className="text-base sm:text-lg font-semibold text-foreground">{intro.closing}</p>
+            </div>
           </div>
 
           {/* CTA */}
           <button
             type="button"
             onClick={() => setShowIntro(false)}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.97]"
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-lg sm:text-xl font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.97]"
           >
             <span>{intro.cta}</span>
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
 
           <button
             type="button"
             onClick={() => { setLang(null); setShowIntro(false); }}
-            className="text-xs text-muted-foreground underline-offset-2 hover:underline text-center pb-2"
+            className="text-sm text-muted-foreground underline-offset-2 hover:underline text-center pb-2"
           >
-            ← {lang === "en" ? "Change language" : lang === "hi" ? "\u092d\u093e\u0937\u093e \u092c\u0926\u0932\u0947\u0902" : "\u092d\u093e\u0937\u093e \u092c\u0926\u0932\u093e"}
+            ← {intro.changeLang}
           </button>
         </div>
       </Shell>
@@ -485,7 +535,7 @@ function SurveyPage() {
   }
 
   const handleBack = () => {
-    setError(false);
+    setError(null);
     if (step === 0) {
       setLang(null);
     } else {
@@ -495,25 +545,16 @@ function SurveyPage() {
 
   return (
     <Shell>
-      {/* Simple Progress Bar at Top */}
-      <div className="sticky top-0 z-30 -mx-4 -mt-8 mb-6 bg-background/95 backdrop-blur-sm border-b border-border px-4 py-4 sm:py-5">
-        <div className="mx-auto w-full max-w-2xl">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-medium text-muted-foreground">
-              {step + 1} {t.of} {total}
-            </p>
-          </div>
-          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary transition-all duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
+      {/* Ultra-minimal Fixed Edge Progress Bar (Typeform/Linear Style) */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-foreground/5 pointer-events-none">
+        <div
+          className="h-full bg-primary transition-all duration-500 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
 
       {/* Chat-like Conversation Flow */}
-      <div className="space-y-4 sm:space-y-5">
+      <div className="space-y-4 sm:space-y-5 pt-2 sm:pt-4">
         {QUESTIONS.slice(0, step + 1).map((q, idx) => {
           const ans = answers[q.id];
           const isActive = idx === step;
@@ -588,7 +629,11 @@ function SurveyPage() {
               <div className="mb-5">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-2xl rounded-br-2xl bg-muted/60 border border-border/40">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Question {step + 1} {t.of} {total}
+                    {t.question} {step + 1} {t.of} {total}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/40 font-normal">·</span>
+                  <span className="text-[10px] font-semibold text-primary tabular-nums">
+                    {Math.round(progress)}%
                   </span>
                   {isTypingQuestion && (
                     <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted/50">
@@ -889,7 +934,12 @@ function SurveyPage() {
                 <VoiceInput
                   lang={lang}
                   questionType={q.type}
-                  disableAudioRecording={q.id === "name" || q.id === "phone"}
+                  disableAudioRecording={
+                    q.id === "name" ||
+                    q.id === "phone" ||
+                    q.id === "state" ||
+                    q.id === "city"
+                  }
                   existingText={current.text}
                   onTranscript={(text) =>
                     update({ text: current.text ? `${current.text} ${text}` : text })
@@ -917,7 +967,7 @@ function SurveyPage() {
                 {/* Error Message */}
                 {error && (
                   <div className="mt-4 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <p className="text-sm font-medium text-destructive">{t.required}</p>
+                    <p className="text-sm font-medium text-destructive">{error}</p>
                   </div>
                 )}
 

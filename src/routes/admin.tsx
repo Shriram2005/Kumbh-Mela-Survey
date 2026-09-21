@@ -753,6 +753,9 @@ function ResponseCard({
   const stateText = stateObj?.text?.trim();
   const stateAudio = stateObj?.audioUrl;
 
+  const cityObj = response.answers["city"];
+  const cityText = cityObj?.text?.trim();
+
   const expRating = response.answers["experience"]?.text;
   const prevKumbh =
     response.answers["previous_kumbh"]?.text?.trim() ||
@@ -788,8 +791,10 @@ function ResponseCard({
               </a>
             ) : null}
 
-            {stateText ? (
-              <span className="response-card-state">{stateText}</span>
+            {cityText || stateText ? (
+              <span className="response-card-state">
+                {[cityText, stateText].filter(Boolean).join(", ")}
+              </span>
             ) : stateAudio ? (
               <span className="response-card-state flex items-center gap-1 text-primary">
                 <Mic className="h-3 w-3" /> Audio State

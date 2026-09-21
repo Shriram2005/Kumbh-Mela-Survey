@@ -158,6 +158,15 @@ export const QUESTIONS: Question[] = [
     },
   },
   {
+    id: "city",
+    type: "text",
+    label: {
+      en: "Which city are you from?",
+      hi: "आप किस शहर से हैं?",
+      mr: "तुम्ही कोणत्या शहरातून आला आहात?",
+    },
+  },
+  {
     id: "experience",
     type: "choice",
     label: {
