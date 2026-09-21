@@ -46,6 +46,7 @@ export const Route = createFileRoute("/")({
 
 function SurveyPage() {
   const [lang, setLang] = useState<Lang | null>(null);
+  const [showIntro, setShowIntro] = useState(false);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
   const [error, setError] = useState(false);
@@ -357,7 +358,7 @@ function SurveyPage() {
             <button
               key={l.code}
               type="button"
-              onClick={() => setLang(l.code)}
+              onClick={() => { setLang(l.code); setShowIntro(true); }}
               className="w-full flex items-center justify-between rounded-xl border-2 border-border bg-card px-6 py-5 text-left transition-all hover:border-primary hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
             >
               <span className="flex items-center gap-3">
@@ -375,6 +376,84 @@ function SurveyPage() {
         <p className="mt-8 text-center text-xs text-muted-foreground">
           Your feedback helps improve the experience for millions of pilgrims
         </p>
+      </Shell>
+    );
+  }
+
+  if (showIntro && lang) {
+    const introContent = {
+      en: {
+        headline: "Your voice shapes the next Kumbh Mela 🙏",
+        body: "You attended one of the world's largest gatherings. Your experience is invaluable in planning better facilities for the upcoming Nashik Kumbh Mela.",
+        bullets: [
+          "Takes only 3\u20135 minutes",
+          "Helps improve safety, sanitation & services",
+          "Your responses are anonymous",
+        ],
+        cta: "Start Survey",
+      },
+      hi: {
+        headline: "आपकी आवाज़ अगले कुंभमेले को बेहतर बनाएगी 🙏",
+        body: "\u0906\u092a\u0928\u0947 \u0926\u0941\u0928\u093f\u092f\u093e \u0915\u0947 \u0938\u092c\u0938\u0947 \u092c\u095c\u0947 \u0906\u092f\u094b\u091c\u0928\u094b\u0902 \u092e\u0947\u0902 \u0938\u0947 \u090f\u0915 \u092e\u0947\u0902 \u092d\u093e\u0917 \u0932\u093f\u092f\u093e \u0939\u0948\u0964 \u0906\u092a\u0915\u093e \u0905\u0928\u0941\u092d\u0935 \u0906\u0917\u093e\u092e\u0940 \u0928\u093e\u0938\u093f\u0915 \u0915\u0941\u0902\u092d\u092e\u0947\u0932\u0947 \u0915\u0940 \u092c\u0947\u0939\u0924\u0930 \u0938\u0941\u0935\u093f\u0927\u093e\u0913\u0902 \u0915\u0940 \u092f\u094b\u091c\u0928\u093e \u092e\u0947\u0902 \u0905\u092e\u0942\u0932\u094d\u092f \u0938\u0939\u092f\u094b\u0917 \u0926\u0947\u0917\u093e\u0964",
+        bullets: [
+          "\u0938\u093f\u0930\u094d\u092b\u093c 3\u20135 \u092e\u093f\u0928\u091f \u0932\u0917\u0924\u0947 \u0939\u0948\u0902",
+          "\u0938\u0941\u0930\u0915\u094d\u0937\u093e, \u0938\u094d\u0935\u091a\u094d\u091b\u0924\u093e \u0914\u0930 \u0938\u0947\u0935\u093e\u0913\u0902 \u0915\u094b \u092c\u0947\u0939\u0924\u0930 \u092c\u0928\u093e\u0928\u0947 \u092e\u0947\u0902 \u092e\u0926\u0926 \u0915\u0930\u0924\u093e \u0939\u0948",
+          "\u0906\u092a\u0915\u0940 \u092a\u094d\u0930\u0924\u093f\u0915\u094d\u0930\u093f\u092f\u093e\u090f\u0901 \u0917\u0941\u092e\u0928\u093e\u092e \u0939\u0948\u0902",
+        ],
+        cta: "\u0938\u0930\u094d\u0935\u0947\u0915\u094d\u0937\u0923 \u0936\u0941\u0930\u0942 \u0915\u0930\u0947\u0902",
+      },
+      mr: {
+        headline: "तुमचा अनुभव पुढील कुंभमेळाला आकार देईल 🙏",
+        body: "\u0924\u0941\u092e\u094d\u0939\u0940 \u091c\u0917\u093e\u0924\u0940\u0932 \u0938\u0930\u094d\u0935\u093e\u0924 \u092e\u094b\u0920\u094d\u092f\u093e \u092e\u0947\u0933\u093e\u0935\u093e\u0902\u092a\u0948\u0915\u0940 \u090f\u0915\u093e\u0924 \u0938\u0939\u092d\u093e\u0917\u0940 \u091d\u093e\u0932\u093e\u0924. \u0924\u0941\u092e\u091a\u093e \u0905\u0928\u0941\u092d\u0935 \u0906\u0917\u093e\u092e\u0940 \u0928\u093e\u0936\u093f\u0915 \u0915\u0941\u0902\u092d\u092e\u0947\u0933\u094d\u092f\u093e\u0938\u093e\u0920\u0940 \u091a\u093e\u0902\u0917\u0932\u094d\u092f\u093e \u0938\u0941\u0935\u093f\u0927\u093e \u0906\u0916\u0923\u094d\u092f\u093e\u0938 \u092e\u0926\u0924 \u0915\u0930\u0947\u0932.",
+        bullets: [
+          "\u092b\u0915\u094d\u0924 3\u20135 \u092e\u093f\u0928\u093f\u091f\u0947 \u0932\u093e\u0917\u0924\u093e\u0924",
+          "\u0938\u0941\u0930\u0915\u094d\u0937\u093e, \u0938\u094d\u0935\u091a\u094d\u091b\u0924\u093e \u0906\u0923\u093f \u0938\u0947\u0935\u093e \u0938\u0941\u0927\u093e\u0930\u0923\u094d\u092f\u093e\u0938 \u092e\u0926\u0924 \u0939\u094b\u0924\u0947",
+          "\u0924\u0941\u092e\u091a\u0940 \u092e\u093e\u0939\u093f\u0924\u0940 \u0917\u094b\u092a\u0928\u0940\u092f \u0906\u0939\u0947",
+        ],
+        cta: "\u0938\u0930\u094d\u0935\u0947\u0915\u094d\u0937\u0923 \u0938\u0941\u0930\u0942 \u0915\u0930\u093e",
+      },
+    } as const;
+    const intro = introContent[lang];
+    return (
+      <Shell>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-5">
+          {/* Headline */}
+          <div className="text-center pt-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-primary/70 mb-2">Kumbh Mela Survey</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-foreground leading-snug">{intro.headline}</h1>
+          </div>
+
+          {/* Info card */}
+          <div className="rounded-2xl border border-border/60 bg-card/80 px-5 py-4 shadow-sm">
+            <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">{intro.body}</p>
+            <ul className="mt-3 space-y-2">
+              {intro.bullets.map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-foreground">
+                  <span className="text-primary font-bold shrink-0">✓</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* CTA */}
+          <button
+            type="button"
+            onClick={() => setShowIntro(false)}
+            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.97]"
+          >
+            <span>{intro.cta}</span>
+            <ChevronRight className="h-5 w-5" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setLang(null); setShowIntro(false); }}
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline text-center pb-2"
+          >
+            ← {lang === "en" ? "Change language" : lang === "hi" ? "\u092d\u093e\u0937\u093e \u092c\u0926\u0932\u0947\u0902" : "\u092d\u093e\u0937\u093e \u092c\u0926\u0932\u093e"}
+          </button>
+        </div>
       </Shell>
     );
   }
