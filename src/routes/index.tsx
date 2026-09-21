@@ -423,15 +423,6 @@ function SurveyPage() {
             <p className="text-xs font-medium text-muted-foreground">
               {step + 1} {t.of} {total}
             </p>
-            <button
-              type="button"
-              onClick={() => setLang(null)}
-              className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
-              title={t.chooseLang}
-            >
-              <span>🌐</span>
-              <span>{LANGUAGES.find((l) => l.code === lang)?.native}</span>
-            </button>
           </div>
           <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
             <div
@@ -542,9 +533,24 @@ function SurveyPage() {
                   <div className="space-y-2">
                     <label className="sr-only">{t.yourAnswer}</label>
                     <input
+                      type={q.id === "phone" ? "tel" : "text"}
+                      inputMode={q.id === "phone" ? "tel" : "text"}
+                      autoComplete={
+                        q.id === "phone" ? "tel" : q.id === "name" ? "name" : undefined
+                      }
                       value={current.text}
-                      onChange={(e) => update({ text: e.target.value })}
-                      placeholder={t.yourAnswer}
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        if (q.id === "phone") {
+                          val = val.replace(/[^\d+\s\-()]/g, "");
+                        }
+                        update({ text: val });
+                      }}
+                      placeholder={
+                        q.id === "phone"
+                          ? t.phonePlaceholder || "+91 98765 43210"
+                          : t.yourAnswer
+                      }
                       className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
                       autoFocus
                     />
@@ -804,7 +810,7 @@ function SurveyPage() {
                 <VoiceInput
                   lang={lang}
                   questionType={q.type}
-                  disableAudioRecording={q.id === "name"}
+                  disableAudioRecording={q.id === "name" || q.id === "phone"}
                   existingText={current.text}
                   onTranscript={(text) =>
                     update({ text: current.text ? `${current.text} ${text}` : text })
@@ -877,7 +883,7 @@ function SurveyPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen bg-muted/40 px-4 py-8 sm:py-14 pb-32">
+    <main className="min-h-screen survey-form-shell px-4 py-8 sm:py-14 pb-32">
       <Toaster
         position="bottom-center"
         toastOptions={{
@@ -890,7 +896,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           },
         }}
       />
-      <div className="mx-auto w-full max-w-2xl">{children}</div>
+      <div className="mx-auto w-full max-w-2xl survey-glass-panel">{children}</div>
     </main>
   );
 }

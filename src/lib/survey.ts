@@ -51,6 +51,7 @@ export const UI = {
     removeFile: "Remove",
     uploadHint: "Photo, video, audio, or document (up to 10MB)",
     fileTooLarge: "File size exceeds 10MB limit. Please choose a smaller file.",
+    phonePlaceholder: "e.g. 9876543210 (Optional)",
   },
   hi: {
     title: "कुंभ मेला आगंतुक सर्वेक्षण",
@@ -87,6 +88,7 @@ export const UI = {
     removeFile: "हटाएं",
     uploadHint: "फ़ोटो, वीडियो, ऑडियो या दस्तावेज़ (अधिकतम 10MB)",
     fileTooLarge: "फ़ाइल का आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइल चुनें।",
+    phonePlaceholder: "उदा. 9876543210 (वैकल्पिक)",
   },
   mr: {
     title: "कुंभमेळा अभ्यागत सर्वेक्षण",
@@ -123,6 +125,7 @@ export const UI = {
     removeFile: "काढा",
     uploadHint: "फोटो, व्हिडिओ, ऑडिओ किंवा कागदपत्र (कमाल 10MB)",
     fileTooLarge: "फाईलचा आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल निवडा.",
+    phonePlaceholder: "उदा. 9876543210 (पर्यायी)",
   },
 };
 
@@ -134,6 +137,15 @@ export const QUESTIONS: Question[] = [
       en: "What is your full name?",
       hi: "आपका पूरा नाम क्या है?",
       mr: "तुमचे पूर्ण नाव काय आहे?",
+    },
+  },
+  {
+    id: "phone",
+    type: "text",
+    label: {
+      en: "What is your phone number?",
+      hi: "आपका फ़ोन नंबर क्या है?",
+      mr: "तुमचा फोन नंबर काय आहे?",
     },
   },
   {

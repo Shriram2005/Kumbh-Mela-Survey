@@ -20,6 +20,7 @@ import {
   Mic,
   Paperclip,
   Film,
+  Phone,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -307,15 +308,15 @@ function AdminPage() {
         r.answers["previous_kumbh"]?.choice?.trim();
       if (!val) return;
       if (val.includes("2024") || val.includes("Prayagraj") || val.includes("प्रयागराज")) {
-        kumbhCounts["Prayagraj (2024)"] += 1;
+        kumbhCounts["Prayagraj (2024)"] = (kumbhCounts["Prayagraj (2024)"] ?? 0) + 1;
       } else if (val.includes("2010") || val.includes("Haridwar") || val.includes("हरिद्वार")) {
-        kumbhCounts["Haridwar (2010)"] += 1;
+        kumbhCounts["Haridwar (2010)"] = (kumbhCounts["Haridwar (2010)"] ?? 0) + 1;
       } else if (val.includes("2004") || val.includes("Ujjain") || val.includes("उज्जैन")) {
-        kumbhCounts["Ujjain (2004)"] += 1;
+        kumbhCounts["Ujjain (2004)"] = (kumbhCounts["Ujjain (2004)"] ?? 0) + 1;
       } else if (val.includes("2015") || val.includes("Nashik") || val.includes("नासिक") || val.includes("नाशिक")) {
-        kumbhCounts["Nashik (2015)"] += 1;
+        kumbhCounts["Nashik (2015)"] = (kumbhCounts["Nashik (2015)"] ?? 0) + 1;
       } else {
-        kumbhCounts["First-time Visitor"] += 1;
+        kumbhCounts["First-time Visitor"] = (kumbhCounts["First-time Visitor"] ?? 0) + 1;
       }
     });
 
@@ -628,7 +629,7 @@ function AdminPage() {
             <Search className="admin-search-icon" />
             <input
               type="search"
-              placeholder="Search by name, state, keyword, or 'audio'…"
+              placeholder="Search by name, phone, state, keyword, or 'audio'…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -745,6 +746,9 @@ function ResponseCard({
   const nameText = nameObj?.text?.trim();
   const nameAudio = nameObj?.audioUrl;
 
+  const phoneObj = response.answers["phone"];
+  const phoneText = phoneObj?.text?.trim();
+
   const stateObj = response.answers["state"];
   const stateText = stateObj?.text?.trim();
   const stateAudio = stateObj?.audioUrl;
@@ -771,6 +775,18 @@ function ResponseCard({
             ) : (
               <span className="response-card-name text-muted-foreground italic">Anonymous</span>
             )}
+
+            {phoneText ? (
+              <a
+                href={`tel:${phoneText}`}
+                onClick={(e) => e.stopPropagation()}
+                className="response-card-phone inline-flex items-center gap-1"
+                title={`Call ${phoneText}`}
+              >
+                <Phone className="h-3 w-3" />
+                <span>{phoneText}</span>
+              </a>
+            ) : null}
 
             {stateText ? (
               <span className="response-card-state">{stateText}</span>
