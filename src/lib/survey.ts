@@ -52,6 +52,10 @@ export const UI = {
     uploadHint: "Photo, video, audio, or document (up to 10MB)",
     fileTooLarge: "File size exceeds 10MB limit. Please choose a smaller file.",
     phonePlaceholder: "e.g. 9876543210 (Optional)",
+    confirmTitle: "Submit your response?",
+    confirmMsg: "Once submitted, your answers cannot be changed.",
+    confirmYes: "Yes, submit",
+    confirmCancel: "Go back",
   },
   hi: {
     title: "कुंभ मेला आगंतुक सर्वेक्षण",
@@ -89,6 +93,10 @@ export const UI = {
     uploadHint: "फ़ोटो, वीडियो, ऑडियो या दस्तावेज़ (अधिकतम 10MB)",
     fileTooLarge: "फ़ाइल का आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइल चुनें।",
     phonePlaceholder: "उदा. 9876543210 (वैकल्पिक)",
+    confirmTitle: "अपना उत्तर जमा करें?",
+    confirmMsg: "एक बार जमा होने के बाद आपके उत्तर बदले नहीं जा सकते।",
+    confirmYes: "हाँ, जमा करें",
+    confirmCancel: "वापस जाएं",
   },
   mr: {
     title: "कुंभमेळा अभ्यागत सर्वेक्षण",
@@ -126,6 +134,10 @@ export const UI = {
     uploadHint: "फोटो, व्हिडिओ, ऑडिओ किंवा कागदपत्र (कमाल 10MB)",
     fileTooLarge: "फाईलचा आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल निवडा.",
     phonePlaceholder: "उदा. 9876543210 (पर्यायी)",
+    confirmTitle: "तुमचे उत्तर सबमिट करायचे?",
+    confirmMsg: "एकदा सबमिट केल्यानंतर तुमची उत्तरे बदलता येणार नाहीत.",
+    confirmYes: "हो, सबमिट करा",
+    confirmCancel: "मागे जा",
   },
 };
 

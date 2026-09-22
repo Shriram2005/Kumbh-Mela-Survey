@@ -53,6 +53,7 @@ function SurveyPage() {
 
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
   const audioBlobsRef = useRef<Record<string, Blob>>({});
@@ -214,13 +215,13 @@ function SurveyPage() {
       if (phone.length > 0) {
         // Strip formatting chars for digit count check
         const digits = phone.replace(/[^\d]/g, "");
-        if (digits.length < 7 || digits.length > 15) {
+        if (digits.length !== 10) {
           const msg =
             lang === "hi"
-              ? "कृपया एक मान्य फ़ोन नंबर दर्ज करें (7–15 अंक)"
+              ? "कृपया 10 अंकों का वैध मोबाइल नंबर दर्ज करें"
               : lang === "mr"
-              ? "कृपया वैध फोन नंबर प्रविष्ट करा (7–15 अंक)"
-              : "Please enter a valid phone number (7–15 digits)";
+              ? "कृपया 10 अंकांचा वैध मोबाइल नंबर प्रविष्ट करा"
+              : "Please enter a valid 10-digit mobile number";
           setError(msg);
           return;
         }
@@ -249,101 +250,93 @@ function SurveyPage() {
     setError(null);
 
     if (step === total - 1) {
-      setSubmitting(true);
-      try {
-        const finalAnswers: Answers = { ...answers };
-
-        // 1. Upload audio recordings to AWS S3
-        const audioUploadPromises = Object.entries(audioBlobsRef.current).map(
-          async ([qid, blob]) => {
-            try {
-              const s3Url = await uploadAudioToS3(blob, responseIdRef.current, qid);
-              return { qid, s3Url };
-            } catch (err) {
-              console.error(`Failed to upload audio for question ${qid} to S3:`, err);
-              return { qid, s3Url: undefined };
-            }
-          },
-        );
-
-        // 2. Upload attached files to AWS S3
-        const fileUploadPromises = Object.entries(filesRef.current).map(
-          async ([qid, fileOrBlob]) => {
-            try {
-              const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
-              const s3Url = await uploadFileToS3(fileOrBlob, responseIdRef.current, qid, fileName);
-              return { qid, s3Url, fileName };
-            } catch (err) {
-              console.error(`Failed to upload file for question ${qid} to S3:`, err);
-              return { qid, s3Url: undefined, fileName: undefined };
-            }
-          },
-        );
-
-        const [audioResults, fileResults] = await Promise.all([
-          Promise.all(audioUploadPromises),
-          Promise.all(fileUploadPromises),
-        ]);
-
-        for (const { qid, s3Url } of audioResults) {
-          if (finalAnswers[qid] && s3Url) {
-            finalAnswers[qid] = {
-              ...finalAnswers[qid],
-              audioUrl: s3Url,
-            };
-          } else if (finalAnswers[qid]) {
-            const { audioUrl: _blobUrl, ...rest } = finalAnswers[qid] as any;
-            finalAnswers[qid] = rest;
-          }
-        }
-
-        for (const { qid, s3Url, fileName } of fileResults) {
-          if (finalAnswers[qid] && s3Url) {
-            finalAnswers[qid] = {
-              ...finalAnswers[qid],
-              fileUrl: s3Url,
-              fileName: fileName ?? finalAnswers[qid].fileName,
-            };
-          } else if (finalAnswers[qid]) {
-            const { fileUrl: _fileBlobUrl, ...rest } = finalAnswers[qid] as any;
-            finalAnswers[qid] = rest;
-          }
-        }
-
-        await saveResponse({
-          id: responseIdRef.current,
-          lang: lang ?? "en",
-          submittedAt: new Date().toISOString(),
-          answers: finalAnswers,
-        });
-
-        // Mark survey as submitted to prevent resubmission
-        markAsSubmitted();
-
-        // Clear saved draft from device storage
-        await clearDraft();
-
-        // Clean up memory blob URLs
-        Object.values(answers).forEach((a) => {
-          if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
-            URL.revokeObjectURL(a.audioUrl);
-          }
-          if (a.fileUrl && a.fileUrl.startsWith("blob:")) {
-            URL.revokeObjectURL(a.fileUrl);
-          }
-        });
-        audioBlobsRef.current = {};
-        filesRef.current = {};
-
-        setSubmitted(true);
-      } catch (err) {
-        console.error("Submit error:", err);
-      } finally {
-        setSubmitting(false);
-      }
+      setShowConfirm(true);
       return;
     }
     setStep((s) => s + 1);
+  };
+
+  const handleConfirmedSubmit = async () => {
+    setShowConfirm(false);
+    setSubmitting(true);
+    try {
+      const finalAnswers: Answers = { ...answers };
+
+      const audioUploadPromises = Object.entries(audioBlobsRef.current).map(
+        async ([qid, blob]) => {
+          try {
+            const s3Url = await uploadAudioToS3(blob, responseIdRef.current, qid);
+            return { qid, s3Url };
+          } catch (err) {
+            console.error(`Failed to upload audio for question ${qid} to S3:`, err);
+            return { qid, s3Url: undefined };
+          }
+        },
+      );
+
+      const fileUploadPromises = Object.entries(filesRef.current).map(
+        async ([qid, fileOrBlob]) => {
+          try {
+            const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
+            const s3Url = await uploadFileToS3(fileOrBlob, responseIdRef.current, qid, fileName);
+            return { qid, s3Url, fileName };
+          } catch (err) {
+            console.error(`Failed to upload file for question ${qid} to S3:`, err);
+            return { qid, s3Url: undefined, fileName: undefined };
+          }
+        },
+      );
+
+      const [audioResults, fileResults] = await Promise.all([
+        Promise.all(audioUploadPromises),
+        Promise.all(fileUploadPromises),
+      ]);
+
+      for (const { qid, s3Url } of audioResults) {
+        if (finalAnswers[qid] && s3Url) {
+          finalAnswers[qid] = { ...finalAnswers[qid], audioUrl: s3Url };
+        } else if (finalAnswers[qid]) {
+          const { audioUrl: _blobUrl, ...rest } = finalAnswers[qid] as any;
+          finalAnswers[qid] = rest;
+        }
+      }
+
+      for (const { qid, s3Url, fileName } of fileResults) {
+        if (finalAnswers[qid] && s3Url) {
+          finalAnswers[qid] = {
+            ...finalAnswers[qid],
+            fileUrl: s3Url,
+            fileName: fileName ?? finalAnswers[qid].fileName,
+          };
+        } else if (finalAnswers[qid]) {
+          const { fileUrl: _fileBlobUrl, ...rest } = finalAnswers[qid] as any;
+          finalAnswers[qid] = rest;
+        }
+      }
+
+      await saveResponse({
+        id: responseIdRef.current,
+        lang: lang ?? "en",
+        submittedAt: new Date().toISOString(),
+        answers: finalAnswers,
+      });
+
+      markAsSubmitted();
+      await clearDraft();
+
+      Object.values(answers).forEach((a) => {
+        if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
+        if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+      });
+      audioBlobsRef.current = {};
+      filesRef.current = {};
+
+      setSubmitted(true);
+    } catch (err) {
+      console.error("Submit error:", err);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const restart = () => {
@@ -351,13 +344,9 @@ function SurveyPage() {
     clearSubmissionStatus();
     draftRestoredRef.current = false;
     Object.values(answers).forEach((a) => {
-      if (a.audioUrl && a.audioUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(a.audioUrl);
-      }
-      if (a.fileUrl && a.fileUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(a.fileUrl);
-      }
-    });
+      if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
+      if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+      });
     audioBlobsRef.current = {};
     filesRef.current = {};
     setAnswers({});
@@ -366,6 +355,32 @@ function SurveyPage() {
     setLang(null);
     responseIdRef.current = crypto.randomUUID();
   };
+
+  if (submitted) {
+    return (
+      <Shell>
+        <div className="text-center py-8 animate-in fade-in zoom-in duration-500">
+          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6">
+            <Check className="h-10 w-10" />
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+            {t.thanks}
+          </h1>
+          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto">
+            {t.thanksBody}
+          </p>
+          <button
+            type="button"
+            onClick={restart}
+            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-medium text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all active:scale-[0.97]"
+          >
+            <span>{t.another}</span>
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      </Shell>
+    );
+  }
 
   if (!lang) {
     return (
@@ -508,32 +523,6 @@ function SurveyPage() {
     );
   }
 
-  if (submitted) {
-    return (
-      <Shell>
-        <div className="text-center py-8 animate-in fade-in zoom-in duration-500">
-          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6">
-            <Check className="h-10 w-10" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
-            {t.thanks}
-          </h1>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto">
-            {t.thanksBody}
-          </p>
-          <button
-            type="button"
-            onClick={restart}
-            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-medium text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all active:scale-[0.97]"
-          >
-            <span>{t.another}</span>
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      </Shell>
-    );
-  }
-
   const handleBack = () => {
     setError(null);
     if (step === 0) {
@@ -579,8 +568,8 @@ function SurveyPage() {
                         Edit
                       </button>
                     </div>
-                    <div className="mt-1 px-4 py-3 rounded-2xl rounded-tl-sm bg-card border border-border shadow-sm">
-                      <p className="text-sm sm:text-base leading-relaxed text-foreground">
+                    <div className="mt-1 px-4 py-3 rounded-2xl rounded-tl-sm bg-amber-200/70 border border-border shadow-sm">
+                      <p className="text-[15px] sm:text-base leading-relaxed text-foreground">
                         {q.label[lang]}
                       </p>
                     </div>
@@ -592,7 +581,7 @@ function SurveyPage() {
                   <div className="max-w-[85%] sm:max-w-[75%]">
                     <div className="px-4 py-3 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-sm">
                       {ans?.text ? (
-                        <p className="text-sm sm:text-base leading-relaxed whitespace-pre-line break-words">
+                        <p className="text-[15px] sm:text-base leading-relaxed whitespace-pre-line break-words">
                           {ans.text}
                         </p>
                       ) : null}
@@ -641,7 +630,7 @@ function SurveyPage() {
                     </span>
                   )}
                 </div>
-                <div className="mt-1 px-5 py-4 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-card border-2 border-primary/20 shadow-lg">
+                <div className="mt-1 px-5 py-4 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-amber-200/70 border-2 border-primary/20 shadow-lg">
                   <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
                     {q.label[lang]}
                     {!isTypingQuestion && (
@@ -656,28 +645,43 @@ function SurveyPage() {
                 {q.type === "text" && !hasAudioAnswer && (
                   <div className="space-y-2">
                     <label className="sr-only">{t.yourAnswer}</label>
-                    <input
-                      type={q.id === "phone" ? "tel" : "text"}
-                      inputMode={q.id === "phone" ? "tel" : "text"}
-                      autoComplete={
-                        q.id === "phone" ? "tel" : q.id === "name" ? "name" : undefined
-                      }
-                      value={current.text}
-                      onChange={(e) => {
-                        let val = e.target.value;
-                        if (q.id === "phone") {
-                          val = val.replace(/[^\d+\s\-()]/g, "");
-                        }
-                        update({ text: val });
-                      }}
-                      placeholder={
-                        q.id === "phone"
-                          ? t.phonePlaceholder || "+91 98765 43210"
-                          : t.yourAnswer
-                      }
-                      className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                      autoFocus
-                    />
+                    {q.id === "phone" ? (
+                      <div className="flex items-stretch rounded-xl border-2 border-border bg-card transition-all focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 overflow-hidden">
+                        <span className="flex items-center px-3.5 text-base sm:text-lg font-medium text-muted-foreground border-r border-border bg-muted/40 select-none">
+                          +91
+                        </span>
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          autoComplete="tel"
+                          value={current.text}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^\d\s\-()]/g, "");
+                            update({ text: val });
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); goNext(); }
+                          }}
+                          placeholder={t.phonePlaceholder || "98765 43210"}
+                          className="flex-1 px-4 py-3.5 text-base sm:text-lg bg-transparent outline-none placeholder:text-muted-foreground/50"
+                          autoFocus
+                        />
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        inputMode="text"
+                        autoComplete={q.id === "name" ? "name" : undefined}
+                        value={current.text}
+                        onChange={(e) => update({ text: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); goNext(); }
+                        }}
+                        placeholder={t.yourAnswer}
+                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                        autoFocus
+                      />
+                    )}
                   </div>
                 )}
 
@@ -984,7 +988,7 @@ function SurveyPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={goNext}
+                      onClick={step === total - 1 ? goNext : goNext}
                       disabled={submitting}
                       className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
                     >
@@ -1006,6 +1010,43 @@ function SurveyPage() {
           {LANGUAGES.find((l) => l.code === lang)?.native} · {step + 1}/{total}
         </p>
       </div>
+
+      {/* Submit Confirmation Dialog */}
+      {showConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-6 sm:pb-0"
+          onClick={() => setShowConfirm(false)}
+        >
+          <div
+            className="w-full max-w-sm bg-card rounded-2xl shadow-2xl border border-border p-6 animate-in fade-in slide-in-from-bottom-4 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                <Check className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-base font-semibold text-foreground">{t.confirmTitle}</h2>
+            </div>
+            <p className="text-sm text-muted-foreground mb-5 pl-[52px]">{t.confirmMsg}</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirm(false)}
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 border-border text-foreground hover:bg-accent transition-all active:scale-[0.97]"
+              >
+                {t.confirmCancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmedSubmit}
+                className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-[0.97]"
+              >
+                {t.confirmYes}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }
