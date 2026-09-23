@@ -44,6 +44,7 @@ export const UI = {
     noMic: "Microphone is not available in this browser.",
     skip: "Skip",
     specifyMedical: "Please specify the medical assistance needed...",
+    specifyReason: "Please specify...",
     uploadFile: "Upload photo, video, or document",
     uploadMoreFiles: "Add more files",
     chooseFile: "Choose file",
@@ -55,6 +56,12 @@ export const UI = {
     fileTooLarge: "Total file size exceeds 10MB limit. Please choose smaller files.",
     phonePlaceholder: "e.g. 9876543210 (Optional)",
     emailPlaceholder: "e.g. name@example.com (Optional)",
+    selectState: "Select your state",
+    searchState: "Search state...",
+    popularStates: "Quick select (Frequent states)",
+    allStates: "All States & UTs",
+    otherState: "Other / Type manually",
+    clearSelection: "Clear",
     confirmTitle: "Submit your response?",
     confirmMsg: "Once submitted, your answers cannot be changed.",
     confirmYes: "Yes, submit",
@@ -88,6 +95,7 @@ export const UI = {
     noMic: "इस ब्राउज़र में माइक्रोफ़ोन उपलब्ध नहीं है।",
     skip: "छोड़ें",
     specifyMedical: "कृपया आवश्यक चिकित्सा सहायता का विवरण दें...",
+    specifyReason: "कृपया कारण लिखें...",
     uploadFile: "फ़ोटो, वीडियो या दस्तावेज़ अपलोड करें",
     uploadMoreFiles: "और फ़ाइलें जोड़ें",
     chooseFile: "फ़ाइल चुनें",
@@ -99,6 +107,12 @@ export const UI = {
     fileTooLarge: "फ़ाइलों का कुल आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइलें चुनें।",
     phonePlaceholder: "उदा. 9876543210 (वैकल्पिक)",
     emailPlaceholder: "उदा. name@example.com (वैकल्पिक)",
+    selectState: "अपना राज्य चुनें",
+    searchState: "राज्य खोजें...",
+    popularStates: "त्वरित चयन (प्रमुख राज्य)",
+    allStates: "सभी राज्य और केंद्र शासित प्रदेश",
+    otherState: "अन्य / खुद टाइप करें",
+    clearSelection: "हटाएं",
     confirmTitle: "अपना उत्तर जमा करें?",
     confirmMsg: "एक बार जमा होने के बाद आपके उत्तर बदले नहीं जा सकते।",
     confirmYes: "हाँ, जमा करें",
@@ -132,6 +146,7 @@ export const UI = {
     noMic: "या ब्राउझरमध्ये मायक्रोफोन उपलब्ध नाही.",
     skip: "वगळा",
     specifyMedical: "कृपया आवश्यक वैद्यकीय मदतीचा तपशील द्या...",
+    specifyReason: "कृपया कारण लिहा...",
     uploadFile: "फोटो, व्हिडिओ किंवा कागदपत्र अपलोड करा",
     uploadMoreFiles: "आणखी फाईल्स जोडा",
     chooseFile: "फाईल निवडा",
@@ -143,12 +158,72 @@ export const UI = {
     fileTooLarge: "फाईल्सचा एकूण आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल्स निवडा.",
     phonePlaceholder: "उदा. 9876543210 (पर्यायी)",
     emailPlaceholder: "उदा. name@example.com (पर्यायी)",
+    selectState: "तुमचे राज्य निवडा",
+    searchState: "राज्य शोधा...",
+    popularStates: "त्वरित निवडा (प्रमुख राज्ये)",
+    allStates: "सर्व राज्ये आणि केंद्रशासित प्रदेश",
+    otherState: "इतर / स्वतः टाईप करा",
+    clearSelection: "काढा",
     confirmTitle: "तुमचे उत्तर सबमिट करायचे?",
     confirmMsg: "एकदा सबमिट केल्यानंतर तुमची उत्तरे बदलता येणार नाहीत.",
     confirmYes: "हो, सबमिट करा",
     confirmCancel: "मागे जा",
   },
 };
+
+export interface StateOption {
+  en: string;
+  hi: string;
+  mr: string;
+  isPopular?: boolean;
+}
+
+export const INDIAN_STATES: StateOption[] = [
+  // Popular / High-frequency pilgrim states for Kumbh Mela
+  { en: "Maharashtra", hi: "महाराष्ट्र", mr: "महाराष्ट्र", isPopular: true },
+  { en: "Madhya Pradesh", hi: "मध्य प्रदेश", mr: "मध्य प्रदेश", isPopular: true },
+  { en: "Gujarat", hi: "गुजरात", mr: "गुजरात", isPopular: true },
+  { en: "Uttar Pradesh", hi: "उत्तर प्रदेश", mr: "उत्तर प्रदेश", isPopular: true },
+  { en: "Rajasthan", hi: "राजस्थान", mr: "राजस्थान", isPopular: true },
+  { en: "Delhi", hi: "दिल्ली", mr: "दिल्ली", isPopular: true },
+  { en: "Karnataka", hi: "कर्नाटक", mr: "कर्नाटक", isPopular: true },
+  { en: "Bihar", hi: "बिहार", mr: "बिहार", isPopular: true },
+
+  // Other States
+  { en: "Andhra Pradesh", hi: "आंध्र प्रदेश", mr: "आंध्र प्रदेश" },
+  { en: "Arunachal Pradesh", hi: "अरुणाचल प्रदेश", mr: "अरुणाचल प्रदेश" },
+  { en: "Assam", hi: "असम", mr: "आसाम" },
+  { en: "Chhattisgarh", hi: "छत्तीसगढ़", mr: "छत्तीसगड" },
+  { en: "Goa", hi: "गोवा", mr: "गोवा" },
+  { en: "Haryana", hi: "हरियाणा", mr: "हरियाणा" },
+  { en: "Himachal Pradesh", hi: "हिमाचल प्रदेश", mr: "हिमाचल प्रदेश" },
+  { en: "Jharkhand", hi: "झारखंड", mr: "झारखंड" },
+  { en: "Kerala", hi: "केरल", mr: "केरळ" },
+  { en: "Manipur", hi: "मणिपुर", mr: "मणिपूर" },
+  { en: "Meghalaya", hi: "मेघालय", mr: "मेघालय" },
+  { en: "Mizoram", hi: "मिज़ोरम", mr: "मिझोरम" },
+  { en: "Nagaland", hi: "नागालैंड", mr: "नागालँड" },
+  { en: "Odisha", hi: "ओडिशा", mr: "ओडिशा" },
+  { en: "Punjab", hi: "पंजाब", mr: "पंजाब" },
+  { en: "Sikkim", hi: "सिक्किम", mr: "सिक्कीम" },
+  { en: "Tamil Nadu", hi: "तमिलनाडु", mr: "तमिळनाडू" },
+  { en: "Telangana", hi: "तेलंगाना", mr: "तेलंगणा" },
+  { en: "Tripura", hi: "त्रिपुरा", mr: "त्रिपुरा" },
+  { en: "Uttarakhand", hi: "उत्तराखंड", mr: "उत्तराखंड" },
+  { en: "West Bengal", hi: "पश्चिम बंगाल", mr: "पश्चिम बंगाल" },
+
+  // Union Territories
+  { en: "Andaman and Nicobar Islands", hi: "अंडमान और निकोबार द्वीप समूह", mr: "अंदमान आणि निकोबार" },
+  { en: "Chandigarh", hi: "चंडीगढ़", mr: "चंदिगढ" },
+  { en: "Dadra and Nagar Haveli and Daman and Diu", hi: "दादरा और नगर हवेली और दमन और दीव", mr: "दादरा आणि नगर हवेली आणि दमण आणि दीव" },
+  { en: "Jammu and Kashmir", hi: "जम्मू और कश्मीर", mr: "जम्मू आणि काश्मीर" },
+  { en: "Ladakh", hi: "लद्दाख", mr: "लडाख" },
+  { en: "Lakshadweep", hi: "लक्षद्वीप", mr: "लक्षद्वीप" },
+  { en: "Puducherry", hi: "पुडुचेरी", mr: "पुडुचेरी" },
+
+  // Other / Foreign
+  { en: "Other / Outside India", hi: "अन्य / भारत के बाहर", mr: "इतर / भारताबाहेर" },
+];
 
 export const QUESTIONS: Question[] = [
   {
@@ -233,8 +308,8 @@ export const QUESTIONS: Question[] = [
     type: "choice",
     label: {
       en: "Rate your overall experience at Kumbh Mela:",
-      hi: "कुंभ मेले में अपने समग्र अनुभव को रेट करें:",
-      mr: "कुंभमेळ्यातील तुमच्या एकूण अनुभवाला गुण द्या:",
+      hi: "कुंभ मेले में आपका समग्र अनुभव कैसा रहा?",
+      mr: "कुंभमेळ्यातील तुमचा एकूण अनुभव कसा होता?",
     },
     options: {
       en: ["Excellent", "Good", "Average", "Poor", "Very Poor"],

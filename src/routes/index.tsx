@@ -9,12 +9,16 @@ import {
   Paperclip,
   Film,
   X,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { VoiceInput } from "@/components/VoiceInput";
 import {
   LANGUAGES,
   QUESTIONS,
+  INDIAN_STATES,
+  type StateOption,
   UI,
   saveResponse,
   type Answers,
@@ -172,10 +176,11 @@ function SurveyPage() {
 
   const hasAudioAnswer = Boolean(current.audioUrl) || isRecordingAudio;
 
-  const isTypingQuestion =
-    question.type === "text" ||
-    question.type === "longtext" ||
-    question.type === "file_text";
+  const isRequired =
+    question.id === "name" ||
+    (question.type !== "text" &&
+      question.type !== "longtext" &&
+      question.type !== "file_text");
 
   const update = (patch: Partial<Answer>) => {
     setAnswers((prev) => ({
@@ -261,6 +266,25 @@ function SurveyPage() {
   };
 
   const goNext = async () => {
+    // Name validation — compulsory / required
+    if (question.id === "name") {
+      const name = current.text?.trim() ?? "";
+      const hasAudio = Boolean(current.audioUrl);
+      if (!name && !hasAudio) {
+        setError(
+          lang === "hi"
+            ? "कृपया अपना नाम दर्ज करें"
+            : lang === "mr"
+            ? "कृपया तुमचे नाव प्रविष्ट करा"
+            : "Please enter your name"
+        );
+        return;
+      }
+      setError(null);
+      setStep((s) => s + 1);
+      return;
+    }
+
     // Phone validation — optional but must be valid if filled
     if (question.id === "phone") {
       const phone = current.text?.trim() ?? "";
@@ -305,8 +329,8 @@ function SurveyPage() {
       return;
     }
 
-    // Only typing questions are optional; choice and checkbox questions are required
-    if (!isTypingQuestion) {
+    // Required questions check
+    if (isRequired) {
       const hasText = Boolean(current.text?.trim());
       const hasAudio = Boolean(current.audioUrl);
       if (!hasText && !hasAudio) {
@@ -764,7 +788,7 @@ function SurveyPage() {
                   <span className="text-[10px] font-semibold text-primary tabular-nums">
                     {Math.round(progress)}%
                   </span>
-                  {isTypingQuestion && (
+                  {!isRequired && (
                     <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted/50">
                       {t.optional}
                     </span>
@@ -773,8 +797,8 @@ function SurveyPage() {
                 <div className="mt-1 px-5 py-4 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-amber-200/70 border-2 border-primary/20 shadow-lg">
                   <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
                     {q.label[lang]}
-                    {!isTypingQuestion && (
-                      <span className="text-destructive ml-1" title={t.required}>*</span>
+                    {isRequired && (
+                      <span className="text-foreground ml-1 font-normal" title={t.required}>*</span>
                     )}
                   </h1>
                 </div>
@@ -818,6 +842,14 @@ function SurveyPage() {
                         }}
                         placeholder={t.emailPlaceholder || "e.g. name@example.com (Optional)"}
                         className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                      />
+                    ) : q.id === "state" ? (
+                      <StateSelector
+                        value={current.text ?? ""}
+                        onChange={(val) => update({ text: val })}
+                        lang={lang}
+                        t={t}
+                        onEnter={goNext}
                       />
                     ) : (
                       <input
@@ -963,20 +995,59 @@ function SurveyPage() {
                 {/* Multi-select Checkboxes - Big Touch Targets */}
                 {q.type === "checkbox" && (
                   <div className="space-y-3">
-                    {q.options![lang].map((opt) => {
+                    {q.options![lang].map((opt, optIdx) => {
+                      const isOther = q.id === "reason" && optIdx === q.options![lang].length - 1;
                       const selectedList = current.text
                         ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
                         : [];
-                      const isChecked = selectedList.includes(opt);
+                      const isChecked = isOther
+                        ? selectedList.some(
+                            (s) =>
+                              s === opt ||
+                              s.startsWith(opt + " - ") ||
+                              s.startsWith(opt + ": ") ||
+                              s === "Other" ||
+                              s.startsWith("Other - ") ||
+                              s === "अन्य" ||
+                              s.startsWith("अन्य - ") ||
+                              s === "इतर" ||
+                              s.startsWith("इतर - ")
+                          )
+                        : selectedList.includes(opt);
+
                       return (
                         <button
                           key={opt}
                           type="button"
                           onClick={() => {
-                            const nextList = isChecked
-                              ? selectedList.filter((s) => s !== opt)
-                              : [...selectedList, opt];
-                            update({ text: nextList.join(", ") });
+                            let nextList: string[];
+                            if (isOther) {
+                              if (isChecked) {
+                                nextList = selectedList.filter(
+                                  (s) =>
+                                    s !== opt &&
+                                    !s.startsWith(opt + " - ") &&
+                                    !s.startsWith(opt + ": ") &&
+                                    s !== "Other" &&
+                                    !s.startsWith("Other - ") &&
+                                    s !== "अन्य" &&
+                                    !s.startsWith("अन्य - ") &&
+                                    s !== "इतर" &&
+                                    !s.startsWith("इतर - ")
+                                );
+                                update({ text: nextList.join(", "), details: "" });
+                              } else {
+                                const details = current.details?.trim();
+                                const otherVal = details ? `${opt} - ${details}` : opt;
+                                nextList = [...selectedList, otherVal];
+                                update({ text: nextList.join(", ") });
+                              }
+                            } else {
+                              nextList = isChecked
+                                ? selectedList.filter((s) => s !== opt)
+                                : [...selectedList, opt];
+                              update({ text: nextList.join(", ") });
+                            }
                           }}
                           className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
                             isChecked
@@ -999,6 +1070,76 @@ function SurveyPage() {
                         </button>
                       );
                     })}
+
+                    {/* Primary Reason conditional input field if Other is selected */}
+                    {q.id === "reason" && (() => {
+                      const otherOpt = q.options![lang][q.options![lang].length - 1]!;
+                      const selectedList = current.text
+                        ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
+                        : [];
+                      const isOtherChecked = selectedList.some(
+                        (s) =>
+                          s === otherOpt ||
+                          s.startsWith(otherOpt + " - ") ||
+                          s.startsWith(otherOpt + ": ") ||
+                          s === "Other" ||
+                          s.startsWith("Other - ") ||
+                          s === "अन्य" ||
+                          s.startsWith("अन्य - ") ||
+                          s === "इतर" ||
+                          s.startsWith("इतर - ")
+                      );
+
+                      if (!isOtherChecked) return null;
+
+                      const otherEntry = selectedList.find(
+                        (s) =>
+                          s.startsWith(otherOpt + " - ") ||
+                          s.startsWith(otherOpt + ": ") ||
+                          s.startsWith("Other - ") ||
+                          s.startsWith("अन्य - ") ||
+                          s.startsWith("इतर - ")
+                      );
+                      const existingDetails =
+                        current.details ??
+                        (otherEntry ? otherEntry.split(/ - |: /).slice(1).join(" - ") : "");
+
+                      return (
+                        <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border">
+                          <label className="block text-sm font-medium text-foreground mb-2">
+                            {t.specifyReason || "Please specify your reason..."}
+                          </label>
+                          <input
+                            value={existingDetails}
+                            onChange={(e) => {
+                              const details = e.target.value;
+                              const updatedList = selectedList.map((item) => {
+                                if (
+                                  item === otherOpt ||
+                                  item.startsWith(otherOpt + " - ") ||
+                                  item.startsWith(otherOpt + ": ") ||
+                                  item === "Other" ||
+                                  item.startsWith("Other - ") ||
+                                  item === "अन्य" ||
+                                  item.startsWith("अन्य - ") ||
+                                  item === "इतर" ||
+                                  item.startsWith("इतर - ")
+                                ) {
+                                  return details.trim() ? `${otherOpt} - ${details.trim()}` : otherOpt;
+                                }
+                                return item;
+                              });
+                              update({
+                                details,
+                                text: updatedList.join(", "),
+                              });
+                            }}
+                            placeholder={t.specifyReason || "Please specify your reason..."}
+                            className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                          />
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -1031,7 +1172,7 @@ function SurveyPage() {
                       {(!current.files || current.files.length === 0) && !current.fileUrl ? (
                         <label
                           htmlFor="survey-file-upload"
-                          className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:bg-accent/30 active:scale-[0.98]"
+                          className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-card shadow-sm p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:shadow-md active:scale-[0.98]"
                         >
                           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                             <Upload className="h-6 w-6" />
@@ -1120,39 +1261,41 @@ function SurveyPage() {
                 )}
 
                 {/* Voice Input */}
-                <VoiceInput
-                  lang={lang}
-                  questionType={q.type}
-                  disableAudioRecording={
-                    q.id === "name" ||
-                    q.id === "phone" ||
-                    q.id === "email" ||
-                    q.id === "state" ||
-                    q.id === "city"
-                  }
-                  existingText={current.text}
-                  onTranscript={(text) =>
-                    update({ text: current.text ? `${current.text} ${text}` : text })
-                  }
-                  audioUrl={current.audioUrl}
-                  onRecordingChange={setIsRecordingAudio}
-                  onAudio={(blob, previewUrl) => {
-                    if (blob && previewUrl) {
-                      audioBlobsRef.current[q.id] = blob;
-                      update({ text: "", audioUrl: previewUrl });
-                    } else {
+                {q.id !== "state" && (
+                  <VoiceInput
+                    lang={lang}
+                    questionType={q.type}
+                    disableAudioRecording={
+                      q.id === "name" ||
+                      q.id === "phone" ||
+                      q.id === "email" ||
+                      q.id === "state" ||
+                      q.id === "city"
+                    }
+                    existingText={current.text}
+                    onTranscript={(text) =>
+                      update({ text: current.text ? `${current.text} ${text}` : text })
+                    }
+                    audioUrl={current.audioUrl}
+                    onRecordingChange={setIsRecordingAudio}
+                    onAudio={(blob, previewUrl) => {
+                      if (blob && previewUrl) {
+                        audioBlobsRef.current[q.id] = blob;
+                        update({ text: "", audioUrl: previewUrl });
+                      } else {
+                        delete audioBlobsRef.current[q.id];
+                        update({ audioUrl: undefined });
+                      }
+                    }}
+                    onRecordStart={() => {
+                      if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
+                        URL.revokeObjectURL(current.audioUrl);
+                      }
                       delete audioBlobsRef.current[q.id];
-                      update({ audioUrl: undefined });
-                    }
-                  }}
-                  onRecordStart={() => {
-                    if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
-                      URL.revokeObjectURL(current.audioUrl);
-                    }
-                    delete audioBlobsRef.current[q.id];
-                    update({ text: "", audioUrl: undefined });
-                  }}
-                />
+                      update({ text: "", audioUrl: undefined });
+                    }}
+                  />
+                )}
 
                 {/* Error Message */}
                 {error && (
@@ -1232,6 +1375,213 @@ function SurveyPage() {
         </div>
       )}
     </Shell>
+  );
+}
+
+function StateSelector({
+  value,
+  onChange,
+  lang,
+  t,
+  onEnter,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  lang: Lang;
+  t: (typeof UI)[Lang];
+  onEnter: () => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const popularStates = useMemo(() => INDIAN_STATES.filter((s) => s.isPopular), []);
+
+  const getStateLabel = (s: StateOption) => {
+    if (lang === "hi") return s.hi;
+    if (lang === "mr") return s.mr;
+    return s.en;
+  };
+
+  const isStateSelected = (s: StateOption) => {
+    const v = (value || "").trim().toLowerCase();
+    return (
+      v === s.en.toLowerCase() ||
+      v === s.hi.toLowerCase() ||
+      v === s.mr.toLowerCase()
+    );
+  };
+
+  const filteredStates = useMemo(() => {
+    if (!searchQuery.trim()) return INDIAN_STATES;
+    const q = searchQuery.toLowerCase().trim();
+    return INDIAN_STATES.filter(
+      (s) =>
+        s.en.toLowerCase().includes(q) ||
+        s.hi.toLowerCase().includes(q) ||
+        s.mr.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
+  const handleSelect = (stateOption: StateOption) => {
+    const label = getStateLabel(stateOption);
+    onChange(label);
+    setSearchQuery("");
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="space-y-4 text-left" ref={containerRef}>
+      {/* 1-Tap Popular States Chips */}
+      <div>
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 block">
+          {t.popularStates || "Quick select"}
+        </label>
+        <div className="flex flex-wrap gap-2 sm:gap-2.5">
+          {popularStates.map((s) => {
+            const label = getStateLabel(s);
+            const isSelected = isStateSelected(s);
+            return (
+              <button
+                key={s.en}
+                type="button"
+                onClick={() => {
+                  if (isSelected) {
+                    onChange("");
+                  } else {
+                    handleSelect(s);
+                  }
+                }}
+                className={`px-3.5 py-2 rounded-xl text-sm sm:text-base font-medium border-2 transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
+                    : "bg-card border-border hover:border-primary/50 hover:bg-primary/5 active:scale-95"
+                }`}
+              >
+                {isSelected && <Check className="w-4 h-4" />}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Searchable Dropdown / Custom Input */}
+      <div className="relative">
+        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
+          {t.allStates || "All States & UTs"}
+        </label>
+
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            value={isOpen ? searchQuery : (value || searchQuery)}
+            onFocus={() => {
+              setIsOpen(true);
+            }}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchQuery(val);
+              onChange(val);
+              if (!isOpen) setIsOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                const first = filteredStates[0];
+                if (isOpen && filteredStates.length === 1 && first) {
+                  e.preventDefault();
+                  handleSelect(first);
+                  onEnter();
+                } else if (!isOpen) {
+                  e.preventDefault();
+                  onEnter();
+                }
+              } else if (e.key === "Escape") {
+                setIsOpen(false);
+              }
+            }}
+            placeholder={t.searchState || "Search or select state..."}
+            className="w-full px-4 py-3.5 pl-10 pr-20 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+          />
+          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 pointer-events-none" />
+
+          <div className="absolute right-2.5 flex items-center gap-1">
+            {value && (
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  setSearchQuery("");
+                }}
+                className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                title={t.clearSelection || "Clear"}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsOpen((prev) => !prev)}
+              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Toggle state list"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Dropdown Menu */}
+        {isOpen && (
+          <div className="absolute z-30 mt-1.5 w-full bg-popover/95 backdrop-blur-md border-2 border-border rounded-xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
+            {filteredStates.length > 0 ? (
+              filteredStates.map((s) => {
+                const label = getStateLabel(s);
+                const isSelected = isStateSelected(s);
+                return (
+                  <button
+                    key={s.en}
+                    type="button"
+                    onClick={() => handleSelect(s)}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-left text-sm sm:text-base transition-colors ${
+                      isSelected
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "hover:bg-primary/10 hover:text-primary text-foreground"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {lang !== "en" && (
+                      <span
+                        className={`text-xs ${
+                          isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
+                        }`}
+                      >
+                        {s.en}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="px-4 py-3 text-center text-xs sm:text-sm text-muted-foreground">
+                <p className="font-medium text-foreground">"{searchQuery}"</p>
+                <p className="mt-1 text-xs opacity-75">{t.otherState || "Custom state value used"}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
