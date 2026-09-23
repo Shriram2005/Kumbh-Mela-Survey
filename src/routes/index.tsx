@@ -804,7 +804,6 @@ function SurveyPage() {
                           }}
                           placeholder={t.phonePlaceholder || "98765 43210"}
                           className="flex-1 px-4 py-3.5 text-base sm:text-lg bg-transparent outline-none placeholder:text-muted-foreground/50"
-                          autoFocus
                         />
                       </div>
                     ) : q.id === "email" ? (
@@ -819,7 +818,6 @@ function SurveyPage() {
                         }}
                         placeholder={t.emailPlaceholder || "e.g. name@example.com (Optional)"}
                         className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                        autoFocus
                       />
                     ) : (
                       <input
@@ -833,7 +831,6 @@ function SurveyPage() {
                         }}
                         placeholder={t.yourAnswer}
                         className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                        autoFocus
                       />
                     )}
                   </div>
@@ -848,7 +845,6 @@ function SurveyPage() {
                       placeholder={t.yourAnswer}
                       rows={5}
                       className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
-                      autoFocus
                     />
                   </div>
                 )}
@@ -958,7 +954,6 @@ function SurveyPage() {
                             }}
                             placeholder={t.specifyMedical}
                             className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
-                            autoFocus
                           />
                         </div>
                       )}
@@ -1019,7 +1014,6 @@ function SurveyPage() {
                           placeholder={t.yourAnswer}
                           rows={5}
                           className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
-                          autoFocus
                         />
                       </div>
                     )}
@@ -1167,28 +1161,26 @@ function SurveyPage() {
                   </div>
                 )}
 
-                {/* Navigation Buttons - Fixed at bottom on mobile */}
-                <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border p-4 sm:relative sm:mt-6 sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
-                  <div className="mx-auto max-w-2xl flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={handleBack}
-                      className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium text-foreground bg-card border-2 border-border transition-all hover:bg-accent hover:border-primary/40 active:scale-[0.97]"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                      <span>{t.back}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={step === total - 1 ? goNext : goNext}
-                      disabled={submitting}
-                      className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
-                    >
-                      {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
-                      <span>{step === total - 1 ? t.submit : t.next}</span>
-                      {!submitting && step < total - 1 && <ChevronRight className="h-5 w-5" />}
-                    </button>
-                  </div>
+                {/* Navigation Buttons - Inline within the chat interface */}
+                <div className="mt-6 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium text-foreground bg-card border-2 border-border transition-all hover:bg-accent hover:border-primary/40 active:scale-[0.97]"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                    <span>{t.back}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    disabled={submitting}
+                    className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
+                  >
+                    {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
+                    <span>{step === total - 1 ? t.submit : t.next}</span>
+                    {!submitting && step < total - 1 && <ChevronRight className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1245,7 +1237,7 @@ function SurveyPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen survey-form-shell px-4 py-8 sm:py-14 pb-32">
+    <main className="min-h-screen survey-form-shell px-4 py-8 sm:py-14 pb-8 sm:pb-12 flex flex-col justify-between">
       <Toaster
         position="bottom-center"
         toastOptions={{
@@ -1258,7 +1250,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           },
         }}
       />
-      <div className="mx-auto w-full max-w-2xl survey-glass-panel">{children}</div>
+      <div className="mx-auto w-full max-w-2xl survey-glass-panel flex-1">{children}</div>
+      <footer className="mt-8 text-center text-[11px] sm:text-xs text-muted-foreground/60 select-none tracking-wide">
+        Powered by KKWIEER – MCA
+      </footer>
     </main>
   );
 }
+
