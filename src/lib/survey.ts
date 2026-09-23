@@ -45,13 +45,16 @@ export const UI = {
     skip: "Skip",
     specifyMedical: "Please specify the medical assistance needed...",
     uploadFile: "Upload photo, video, or document",
+    uploadMoreFiles: "Add more files",
     chooseFile: "Choose file",
     noFileChosen: "No file chosen",
     fileAttached: "File attached",
+    filesAttached: "files attached",
     removeFile: "Remove",
-    uploadHint: "Photo, video, audio, or document (up to 10MB)",
-    fileTooLarge: "File size exceeds 10MB limit. Please choose a smaller file.",
+    uploadHint: "Photos, videos, audio, or documents (Total max 10MB)",
+    fileTooLarge: "Total file size exceeds 10MB limit. Please choose smaller files.",
     phonePlaceholder: "e.g. 9876543210 (Optional)",
+    emailPlaceholder: "e.g. name@example.com (Optional)",
     confirmTitle: "Submit your response?",
     confirmMsg: "Once submitted, your answers cannot be changed.",
     confirmYes: "Yes, submit",
@@ -86,13 +89,16 @@ export const UI = {
     skip: "छोड़ें",
     specifyMedical: "कृपया आवश्यक चिकित्सा सहायता का विवरण दें...",
     uploadFile: "फ़ोटो, वीडियो या दस्तावेज़ अपलोड करें",
+    uploadMoreFiles: "और फ़ाइलें जोड़ें",
     chooseFile: "फ़ाइल चुनें",
     noFileChosen: "कोई फ़ाइल नहीं चुनी गई",
     fileAttached: "फ़ाइल संलग्न है",
+    filesAttached: "फ़ाइलें संलग्न हैं",
     removeFile: "हटाएं",
-    uploadHint: "फ़ोटो, वीडियो, ऑडियो या दस्तावेज़ (अधिकतम 10MB)",
-    fileTooLarge: "फ़ाइल का आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइल चुनें।",
+    uploadHint: "फ़ोटो, वीडियो, ऑडियो या दस्तावेज़ (कुल अधिकतम 10MB)",
+    fileTooLarge: "फ़ाइलों का कुल आकार 10MB की सीमा से अधिक है। कृपया छोटी फ़ाइलें चुनें।",
     phonePlaceholder: "उदा. 9876543210 (वैकल्पिक)",
+    emailPlaceholder: "उदा. name@example.com (वैकल्पिक)",
     confirmTitle: "अपना उत्तर जमा करें?",
     confirmMsg: "एक बार जमा होने के बाद आपके उत्तर बदले नहीं जा सकते।",
     confirmYes: "हाँ, जमा करें",
@@ -127,13 +133,16 @@ export const UI = {
     skip: "वगळा",
     specifyMedical: "कृपया आवश्यक वैद्यकीय मदतीचा तपशील द्या...",
     uploadFile: "फोटो, व्हिडिओ किंवा कागदपत्र अपलोड करा",
+    uploadMoreFiles: "आणखी फाईल्स जोडा",
     chooseFile: "फाईल निवडा",
     noFileChosen: "कोणतीही फाईल निवडलेली नाही",
     fileAttached: "फाईल जोडली आहे",
+    filesAttached: "फाईल्स जोडल्या आहेत",
     removeFile: "काढा",
-    uploadHint: "फोटो, व्हिडिओ, ऑडिओ किंवा कागदपत्र (कमाल 10MB)",
-    fileTooLarge: "फाईलचा आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल निवडा.",
+    uploadHint: "फोटो, व्हिडिओ, ऑडिओ किंवा कागदपत्र (एकूण कमाल 10MB)",
+    fileTooLarge: "फाईल्सचा एकूण आकार 10MB पेक्षा जास्त आहे. कृपया लहान फाईल्स निवडा.",
     phonePlaceholder: "उदा. 9876543210 (पर्यायी)",
+    emailPlaceholder: "उदा. name@example.com (पर्यायी)",
     confirmTitle: "तुमचे उत्तर सबमिट करायचे?",
     confirmMsg: "एकदा सबमिट केल्यानंतर तुमची उत्तरे बदलता येणार नाहीत.",
     confirmYes: "हो, सबमिट करा",
@@ -161,6 +170,15 @@ export const QUESTIONS: Question[] = [
     },
   },
   {
+    id: "email",
+    type: "text",
+    label: {
+      en: "What is your email address?",
+      hi: "आपका ईमेल पता क्या है?",
+      mr: "तुमचा ईमेल पत्ता काय आहे?",
+    },
+  },
+  {
     id: "state",
     type: "text",
     label: {
@@ -176,34 +194,6 @@ export const QUESTIONS: Question[] = [
       en: "Which city are you from?",
       hi: "आप किस शहर से हैं?",
       mr: "तुम्ही कोणत्या शहरातून आला आहात?",
-    },
-  },
-  {
-    id: "experience",
-    type: "choice",
-    label: {
-      en: "Rate your overall experience at Kumbh Mela:",
-      hi: "कुंभ मेले में अपने समग्र अनुभव को रेट करें:",
-      mr: "कुंभमेळ्यातील तुमच्या एकूण अनुभवाला गुण द्या:",
-    },
-    options: {
-      en: ["Excellent", "Good", "Average", "Poor", "Very Poor"],
-      hi: ["उत्कृष्ट", "अच्छा", "औसत", "खराब", "बहुत खराब"],
-      mr: ["उत्कृष्ट", "चांगले", "सरासरी", "वाईट", "खूप वाईट"],
-    },
-  },
-  {
-    id: "reason",
-    type: "checkbox",
-    label: {
-      en: "What was your primary reason for attending?",
-      hi: "आने का आपका मुख्य कारण क्या था?",
-      mr: "सहभागी होण्याचे तुमचे मुख्य कारण काय होते?",
-    },
-    options: {
-      en: ["Spiritual", "Cultural", "Photography", "Academic", "Other"],
-      hi: ["आध्यात्मिक", "सांस्कृतिक", "फ़ोटोग्राफ़ी", "शैक्षणिक", "अन्य"],
-      mr: ["आध्यात्मिक", "सांस्कृतिक", "छायाचित्रण (फोटोग्राफी)", "शैक्षणिक", "इतर"],
     },
   },
   {
@@ -236,6 +226,34 @@ export const QUESTIONS: Question[] = [
         "नाशिक (2015)",
         "यापूर्वी कोणत्याही कुंभमेळ्यात सहभागी झालेलो नाही",
       ],
+    },
+  },
+  {
+    id: "experience",
+    type: "choice",
+    label: {
+      en: "Rate your overall experience at Kumbh Mela:",
+      hi: "कुंभ मेले में अपने समग्र अनुभव को रेट करें:",
+      mr: "कुंभमेळ्यातील तुमच्या एकूण अनुभवाला गुण द्या:",
+    },
+    options: {
+      en: ["Excellent", "Good", "Average", "Poor", "Very Poor"],
+      hi: ["उत्कृष्ट", "अच्छा", "औसत", "खराब", "बहुत खराब"],
+      mr: ["उत्कृष्ट", "चांगले", "सरासरी", "वाईट", "खूप वाईट"],
+    },
+  },
+  {
+    id: "reason",
+    type: "checkbox",
+    label: {
+      en: "What was your primary reason for attending?",
+      hi: "आने का आपका मुख्य कारण क्या था?",
+      mr: "सहभागी होण्याचे तुमचे मुख्य कारण काय होते?",
+    },
+    options: {
+      en: ["Spiritual", "Cultural", "Photography", "Academic", "Other"],
+      hi: ["आध्यात्मिक", "सांस्कृतिक", "फ़ोटोग्राफ़ी", "शैक्षणिक", "अन्य"],
+      mr: ["आध्यात्मिक", "सांस्कृतिक", "छायाचित्रण (फोटोग्राफी)", "शैक्षणिक", "इतर"],
     },
   },
   {
@@ -421,12 +439,20 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
+export interface AttachedFile {
+  fileUrl: string;
+  fileName?: string | undefined;
+  fileType?: string | undefined;
+  fileSize?: number | undefined;
+}
+
 export interface Answer {
   text?: string | undefined;
   audioUrl?: string | undefined;
   fileUrl?: string | undefined;
   fileName?: string | undefined;
   fileType?: string | undefined;
+  files?: AttachedFile[] | undefined;
   choice?: string | undefined;
   details?: string | undefined;
 }

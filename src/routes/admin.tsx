@@ -21,6 +21,7 @@ import {
   Paperclip,
   Film,
   Phone,
+  Mail,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -80,21 +81,28 @@ async function exportToExcel(responses: StoredResponse[]) {
 
       const text = (ans.text || ans.choice || "")?.trim();
       const hasAudio = Boolean(ans.audioUrl);
-      const hasFile = Boolean(ans.fileUrl);
+      const allFiles =
+        ans.files && ans.files.length > 0
+          ? ans.files
+          : ans.fileUrl
+          ? [{ fileUrl: ans.fileUrl, fileName: ans.fileName }]
+          : [];
+      const hasFiles = allFiles.length > 0;
+      const fileUrlsStr = allFiles.map((f) => f.fileUrl).join(", ");
 
-      // Only file, no text and no audio
-      if (hasFile && !text && !hasAudio) {
-        return ans.fileUrl!;
+      // Only files, no text and no audio
+      if (hasFiles && !text && !hasAudio) {
+        return fileUrlsStr;
       }
       // Only audio, no text and no file
-      if (hasAudio && !text && !hasFile) {
+      if (hasAudio && !text && !hasFiles) {
         return ans.audioUrl!;
       }
 
       // If text exists along with file/audio, combine cleanly in single column
       let result = text;
-      if (hasFile) {
-        result = result ? `${result} (File: ${ans.fileUrl})` : `(File: ${ans.fileUrl})`;
+      if (hasFiles) {
+        result = result ? `${result} (Files: ${fileUrlsStr})` : `(Files: ${fileUrlsStr})`;
       }
       if (hasAudio) {
         result = result ? `${result} (Audio: ${ans.audioUrl})` : `(Audio: ${ans.audioUrl})`;
@@ -198,10 +206,17 @@ function AdminPage() {
         withAudioCount += 1;
         totalAudioRecordings += audioCount;
       }
-      const fileCount = Object.values(r.answers).filter((a) => Boolean(a.fileUrl)).length;
-      if (fileCount > 0) {
+      let respFileCount = 0;
+      Object.values(r.answers).forEach((a) => {
+        if (a.files && a.files.length > 0) {
+          respFileCount += a.files.length;
+        } else if (a.fileUrl) {
+          respFileCount += 1;
+        }
+      });
+      if (respFileCount > 0) {
         withFilesCount += 1;
-        totalFiles += fileCount;
+        totalFiles += respFileCount;
       }
     });
 
@@ -336,23 +351,29 @@ function AdminPage() {
         if (!hasAudio) return false;
       }
       if (filesOnly) {
-        const hasFiles = Object.values(r.answers).some((a) => Boolean(a.fileUrl));
+        const hasFiles = Object.values(r.answers).some(
+          (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0),
+        );
         if (!hasFiles) return false;
       }
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchId = r.id.toLowerCase().includes(q);
         const matchText = Object.values(r.answers).some(
-          (a) => a.text?.toLowerCase().includes(q),
+          (a) => a.text?.toLowerCase().includes(q) || a.choice?.toLowerCase().includes(q),
         );
         const matchAudio =
           (q === "audio" || q === "voice" || q === "mic") &&
           Object.values(r.answers).some((a) => Boolean(a.audioUrl));
         const matchFile =
           (q === "file" || q === "files" || q === "upload" || q === "image" || q === "video") &&
-          Object.values(r.answers).some((a) => Boolean(a.fileUrl));
+          Object.values(r.answers).some(
+            (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0),
+          );
         const matchFileName = Object.values(r.answers).some(
-          (a) => a.fileName?.toLowerCase().includes(q),
+          (a) =>
+            a.fileName?.toLowerCase().includes(q) ||
+            a.files?.some((f) => f.fileName?.toLowerCase().includes(q)),
         );
         return matchId || matchText || matchAudio || matchFile || matchFileName;
       }
@@ -629,7 +650,7 @@ function AdminPage() {
             <Search className="admin-search-icon" />
             <input
               type="search"
-              placeholder="Search by name, phone, state, keyword, or 'audio'…"
+              placeholder="Search by name, phone, email, state, keyword, or 'audio'…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -749,6 +770,9 @@ function ResponseCard({
   const phoneObj = response.answers["phone"];
   const phoneText = phoneObj?.text?.trim();
 
+  const emailObj = response.answers["email"];
+  const emailText = emailObj?.text?.trim();
+
   const stateObj = response.answers["state"];
   const stateText = stateObj?.text?.trim();
   const stateAudio = stateObj?.audioUrl;
@@ -761,7 +785,11 @@ function ResponseCard({
     response.answers["previous_kumbh"]?.text?.trim() ||
     response.answers["previous_kumbh"]?.choice?.trim();
   const audioCount = Object.values(response.answers).filter((a) => Boolean(a.audioUrl)).length;
-  const fileCount = Object.values(response.answers).filter((a) => Boolean(a.fileUrl)).length;
+  const fileCount = Object.values(response.answers).reduce((acc, a) => {
+    if (a.files && a.files.length > 0) return acc + a.files.length;
+    if (a.fileUrl) return acc + 1;
+    return acc;
+  }, 0);
 
   return (
     <div className={`response-card ${expanded ? "response-card-expanded" : ""}`}>
@@ -788,6 +816,18 @@ function ResponseCard({
               >
                 <Phone className="h-3 w-3" />
                 <span>{phoneText}</span>
+              </a>
+            ) : null}
+
+            {emailText ? (
+              <a
+                href={`mailto:${emailText}`}
+                onClick={(e) => e.stopPropagation()}
+                className="response-card-phone inline-flex items-center gap-1"
+                title={`Email ${emailText}`}
+              >
+                <Mail className="h-3 w-3" />
+                <span>{emailText}</span>
               </a>
             ) : null}
 
@@ -847,7 +887,13 @@ function ResponseCard({
               const a = response.answers[q.id];
               const hasText = Boolean(a?.text?.trim());
               const hasAudio = Boolean(a?.audioUrl);
-              const hasFile = Boolean(a?.fileUrl);
+              const allFiles =
+                a?.files && a.files.length > 0
+                  ? a.files
+                  : a?.fileUrl
+                  ? [{ fileUrl: a.fileUrl, fileName: a.fileName, fileType: a.fileType, fileSize: undefined }]
+                  : [];
+              const hasFile = allFiles.length > 0;
 
               if (!a && !hasAudio && !hasFile) return null;
 
@@ -857,7 +903,7 @@ function ResponseCard({
                     <dt className="answer-question">{q.label.en}</dt>
                     {hasFile ? (
                       <span className="answer-type-tag bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center gap-1">
-                        <Paperclip className="h-2.5 w-2.5" /> File
+                        <Paperclip className="h-2.5 w-2.5" /> {allFiles.length > 1 ? `${allFiles.length} Files` : "File"}
                       </span>
                     ) : hasAudio ? (
                       <span className="answer-type-tag answer-type-audio flex items-center gap-1">
@@ -877,48 +923,55 @@ function ResponseCard({
                       <span className="answer-text">{a!.text}</span>
                     )}
 
-                    {/* Render file attachment if present */}
+                    {/* Render file attachments if present */}
                     {hasFile && (
-                      <div className="mt-2 flex items-center gap-3 rounded-lg border border-border bg-card/70 p-2.5">
-                        {a!.fileType?.startsWith("image/") ||
-                        a!.fileUrl?.match(/\.(jpeg|jpg|png|gif|webp)/i) ? (
-                          <a
-                            href={a!.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="shrink-0 group relative"
-                            title="Open full image"
+                      <div className="mt-2 space-y-2">
+                        {allFiles.map((fileItem, fIdx) => (
+                          <div
+                            key={fIdx}
+                            className="flex items-center gap-3 rounded-lg border border-border bg-card/70 p-2.5"
                           >
-                            <img
-                              src={a!.fileUrl}
-                              alt={a!.fileName || "Uploaded attachment"}
-                              className="h-14 w-14 rounded object-cover border border-border transition-transform group-hover:scale-105"
-                            />
-                          </a>
-                        ) : a!.fileType?.startsWith("video/") ||
-                          a!.fileUrl?.match(/\.(mp4|webm|mov|ogg)/i) ? (
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
-                            <Film className="h-6 w-6" />
+                            {fileItem.fileType?.startsWith("image/") ||
+                            fileItem.fileUrl?.match(/\.(jpeg|jpg|png|gif|webp)/i) ? (
+                              <a
+                                href={fileItem.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shrink-0 group relative"
+                                title="Open full image"
+                              >
+                                <img
+                                  src={fileItem.fileUrl}
+                                  alt={fileItem.fileName || "Uploaded attachment"}
+                                  className="h-14 w-14 rounded object-cover border border-border transition-transform group-hover:scale-105"
+                                />
+                              </a>
+                            ) : fileItem.fileType?.startsWith("video/") ||
+                              fileItem.fileUrl?.match(/\.(mp4|webm|mov|ogg)/i) ? (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                                <Film className="h-6 w-6" />
+                              </div>
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                                <Paperclip className="h-6 w-6" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium text-foreground truncate">
+                                {fileItem.fileName || "Attachment"}
+                              </p>
+                              <a
+                                href={fileItem.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline mt-0.5"
+                              >
+                                <span>Open file</span>
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </div>
                           </div>
-                        ) : (
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
-                            <Paperclip className="h-6 w-6" />
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {a!.fileName || "Attachment"}
-                          </p>
-                          <a
-                            href={a!.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline mt-0.5"
-                          >
-                            <span>Open file</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
+                        ))}
                       </div>
                     )}
 

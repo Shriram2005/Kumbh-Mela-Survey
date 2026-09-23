@@ -6,7 +6,7 @@ export interface SurveyDraft {
   responseId: string;
   answers: Answers;
   audioBlobs: Record<string, Blob>;
-  files?: Record<string, File | Blob>;
+  files?: Record<string, (File | Blob)[] | File | Blob>;
   updatedAt: number;
 }
 

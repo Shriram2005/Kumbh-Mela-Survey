@@ -57,8 +57,8 @@ function SurveyPage() {
 
   // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
   const audioBlobsRef = useRef<Record<string, Blob>>({});
-  // Attached files kept in memory until final submit
-  const filesRef = useRef<Record<string, File | Blob>>({});
+  // Attached files kept in memory until final submit (supports multiple files per question)
+  const filesRef = useRef<Record<string, (File | Blob)[]>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Generate a stable response ID for the entire survey session
@@ -93,20 +93,31 @@ function SurveyPage() {
         });
       }
       if (draft.files) {
-        filesRef.current = { ...draft.files };
-        Object.entries(draft.files).forEach(([qid, fileOrBlob]) => {
+        const restoredFilesRef: Record<string, (File | Blob)[]> = {};
+        Object.entries(draft.files).forEach(([qid, filesOrFile]) => {
+          const fileArray: (File | Blob)[] = Array.isArray(filesOrFile)
+            ? filesOrFile
+            : [filesOrFile];
+          restoredFilesRef[qid] = fileArray;
+
+          const fileItems = fileArray.map((f) => ({
+            fileUrl: URL.createObjectURL(f),
+            fileName: f instanceof File ? f.name : "attachment",
+            fileType: f.type || "application/octet-stream",
+            fileSize: f.size,
+          }));
+
           if (restoredAnswers[qid]) {
             restoredAnswers[qid] = {
               ...restoredAnswers[qid],
-              fileUrl: URL.createObjectURL(fileOrBlob),
-              fileName:
-                fileOrBlob instanceof File
-                  ? fileOrBlob.name
-                  : restoredAnswers[qid].fileName || "attachment",
-              fileType: fileOrBlob.type || restoredAnswers[qid].fileType,
+              files: fileItems,
+              fileUrl: fileItems[0]?.fileUrl,
+              fileName: fileItems[0]?.fileName,
+              fileType: fileItems[0]?.fileType,
             };
           }
         });
+        filesRef.current = restoredFilesRef;
       }
       responseIdRef.current = draft.responseId || crypto.randomUUID();
       setAnswers(restoredAnswers);
@@ -174,38 +185,79 @@ function SurveyPage() {
     setError(null);
   };
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+  const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB total limit across all files
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selectedFiles = Array.from(e.target.files || []);
+    if (selectedFiles.length === 0) return;
 
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error(t.fileTooLarge || "File size exceeds 10MB limit. Please choose a smaller file.");
+    const existingFiles = filesRef.current[question.id] || [];
+    const combinedFiles = [...existingFiles, ...selectedFiles];
+
+    const totalBytes = combinedFiles.reduce((acc, f) => acc + f.size, 0);
+
+    if (totalBytes > MAX_TOTAL_FILE_SIZE) {
+      const formattedTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+      toast.error(
+        `${t.fileTooLarge || "Total file size exceeds 10MB limit."} (${formattedTotal} MB)`
+      );
       e.target.value = "";
       return;
     }
 
-    filesRef.current[question.id] = file;
-    const previewUrl = URL.createObjectURL(file);
+    filesRef.current[question.id] = combinedFiles;
+
+    const fileItems = combinedFiles.map((f) => {
+      const fName = f instanceof File ? f.name : "attachment";
+      const existing = current.files?.find(
+        (ef) => ef.fileName === fName && ef.fileSize === f.size
+      );
+      return {
+        fileUrl: existing ? existing.fileUrl : URL.createObjectURL(f),
+        fileName: fName,
+        fileType: f.type || "application/octet-stream",
+        fileSize: f.size,
+      };
+    });
+
     update({
-      fileUrl: previewUrl,
-      fileName: file.name,
-      fileType: file.type,
+      files: fileItems,
+      fileUrl: fileItems[0]?.fileUrl,
+      fileName: fileItems[0]?.fileName,
+      fileType: fileItems[0]?.fileType,
     });
     e.target.value = "";
   };
 
-  const handleRemoveFile = () => {
-    if (current.fileUrl && current.fileUrl.startsWith("blob:")) {
-      URL.revokeObjectURL(current.fileUrl);
+  const handleRemoveSpecificFile = (fileIndex: number) => {
+    const existingFiles = filesRef.current[question.id] || [];
+    const existingItems = current.files || [];
+
+    const fileToRemove = existingItems[fileIndex];
+    if (fileToRemove?.fileUrl && fileToRemove.fileUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(fileToRemove.fileUrl);
     }
-    delete filesRef.current[question.id];
-    update({
-      fileUrl: undefined,
-      fileName: undefined,
-      fileType: undefined,
-    });
+
+    const nextFiles = existingFiles.filter((_, idx) => idx !== fileIndex);
+    const nextItems = existingItems.filter((_, idx) => idx !== fileIndex);
+
+    if (nextFiles.length > 0) {
+      filesRef.current[question.id] = nextFiles;
+      update({
+        files: nextItems,
+        fileUrl: nextItems[0]?.fileUrl,
+        fileName: nextItems[0]?.fileName,
+        fileType: nextItems[0]?.fileType,
+      });
+    } else {
+      delete filesRef.current[question.id];
+      update({
+        files: undefined,
+        fileUrl: undefined,
+        fileName: undefined,
+        fileType: undefined,
+      });
+    }
   };
 
   const goNext = async () => {
@@ -227,6 +279,27 @@ function SurveyPage() {
         }
       }
       // Phone is optional — valid empty or valid number → proceed
+      setError(null);
+      setStep((s) => s + 1);
+      return;
+    }
+
+    // Email validation — optional but must be valid format if filled
+    if (question.id === "email") {
+      const email = current.text?.trim() ?? "";
+      if (email.length > 0) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          const msg =
+            lang === "hi"
+              ? "कृपया एक मान्य ईमेल पता दर्ज करें"
+              : lang === "mr"
+              ? "कृपया वैध ईमेल पत्ता प्रविष्ट करा"
+              : "Please enter a valid email address";
+          setError(msg);
+          return;
+        }
+      }
       setError(null);
       setStep((s) => s + 1);
       return;
@@ -274,16 +347,36 @@ function SurveyPage() {
         },
       );
 
-      const fileUploadPromises = Object.entries(filesRef.current).map(
-        async ([qid, fileOrBlob]) => {
-          try {
-            const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
-            const s3Url = await uploadFileToS3(fileOrBlob, responseIdRef.current, qid, fileName);
-            return { qid, s3Url, fileName };
-          } catch (err) {
-            console.error(`Failed to upload file for question ${qid} to S3:`, err);
-            return { qid, s3Url: undefined, fileName: undefined };
-          }
+      const fileUploadPromises = Object.entries(filesRef.current).flatMap(
+        ([qid, filesList]) => {
+          return filesList.map(async (fileOrBlob, idx) => {
+            try {
+              const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
+              const uploadTag = filesList.length > 1 ? `${qid}_${idx + 1}` : qid;
+              const s3Url = await uploadFileToS3(
+                fileOrBlob,
+                responseIdRef.current,
+                uploadTag,
+                fileName,
+              );
+              return {
+                qid,
+                s3Url,
+                fileName: fileName || `file_${idx + 1}`,
+                fileType: fileOrBlob.type || "application/octet-stream",
+                fileSize: fileOrBlob.size,
+              };
+            } catch (err) {
+              console.error(`Failed to upload file for question ${qid} to S3:`, err);
+              return {
+                qid,
+                s3Url: undefined,
+                fileName: undefined,
+                fileType: undefined,
+                fileSize: undefined,
+              };
+            }
+          });
         },
       );
 
@@ -301,18 +394,46 @@ function SurveyPage() {
         }
       }
 
-      for (const { qid, s3Url, fileName } of fileResults) {
-        if (finalAnswers[qid] && s3Url) {
-          finalAnswers[qid] = {
-            ...finalAnswers[qid],
-            fileUrl: s3Url,
-            fileName: fileName ?? finalAnswers[qid].fileName,
-          };
-        } else if (finalAnswers[qid]) {
-          const { fileUrl: _fileBlobUrl, ...rest } = finalAnswers[qid] as any;
-          finalAnswers[qid] = rest;
+      const fileResultsByQid: Record<
+        string,
+        Array<{ fileUrl: string; fileName?: string; fileType?: string; fileSize?: number }>
+      > = {};
+      for (const res of fileResults) {
+        if (res.s3Url) {
+          const list = fileResultsByQid[res.qid] ?? [];
+          list.push({
+            fileUrl: res.s3Url,
+            fileName: res.fileName,
+            fileType: res.fileType,
+            fileSize: res.fileSize,
+          });
+          fileResultsByQid[res.qid] = list;
         }
       }
+
+      Object.keys(filesRef.current).forEach((qid) => {
+        if (finalAnswers[qid]) {
+          const uploadedFiles = fileResultsByQid[qid] || [];
+          if (uploadedFiles.length > 0) {
+            finalAnswers[qid] = {
+              ...finalAnswers[qid],
+              files: uploadedFiles,
+              fileUrl: uploadedFiles[0]?.fileUrl,
+              fileName: uploadedFiles[0]?.fileName,
+              fileType: uploadedFiles[0]?.fileType,
+            };
+          } else {
+            const {
+              fileUrl: _fileBlobUrl,
+              fileName: _fn,
+              fileType: _ft,
+              files: _fls,
+              ...rest
+            } = finalAnswers[qid] as any;
+            finalAnswers[qid] = rest;
+          }
+        }
+      });
 
       await saveResponse({
         id: responseIdRef.current,
@@ -327,6 +448,11 @@ function SurveyPage() {
       Object.values(answers).forEach((a) => {
         if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
         if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+        if (a.files) {
+          a.files.forEach((f) => {
+            if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
+          });
+        }
       });
       audioBlobsRef.current = {};
       filesRef.current = {};
@@ -346,7 +472,12 @@ function SurveyPage() {
     Object.values(answers).forEach((a) => {
       if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
       if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
-      });
+      if (a.files) {
+        a.files.forEach((f) => {
+          if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
+        });
+      }
+    });
     audioBlobsRef.current = {};
     filesRef.current = {};
     setAnswers({});
@@ -591,13 +722,22 @@ function SurveyPage() {
                           <audio src={ans.audioUrl} controls className="h-8 max-w-[180px]" />
                         </div>
                       )}
-                      {ans?.fileUrl && (
+                      {ans?.files && ans.files.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          {ans.files.map((f, fIdx) => (
+                            <div key={fIdx} className="flex items-center gap-2 text-xs">
+                              <span>📎</span>
+                              <span className="truncate">{f.fileName || t.fileAttached}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : ans?.fileUrl ? (
                         <div className="mt-2 flex items-center gap-2 text-xs">
                           <span>📎</span>
                           <span className="truncate">{ans.fileName || t.fileAttached}</span>
                         </div>
-                      )}
-                      {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (
+                      ) : null}
+                      {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (!ans?.files || ans.files.length === 0) && (
                         <p className="text-sm italic opacity-70">—</p>
                       )}
                     </div>
@@ -667,6 +807,20 @@ function SurveyPage() {
                           autoFocus
                         />
                       </div>
+                    ) : q.id === "email" ? (
+                      <input
+                        type="email"
+                        inputMode="email"
+                        autoComplete="email"
+                        value={current.text}
+                        onChange={(e) => update({ text: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); goNext(); }
+                        }}
+                        placeholder={t.emailPlaceholder || "e.g. name@example.com (Optional)"}
+                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                        autoFocus
+                      />
                     ) : (
                       <input
                         type="text"
@@ -853,7 +1007,7 @@ function SurveyPage() {
                   </div>
                 )}
 
-                {/* Final Question: Feedback Text + Simple File Upload */}
+                {/* Final Question: Feedback Text + Multi-File Upload */}
                 {q.type === "file_text" && (
                   <div className="space-y-4">
                     {!hasAudioAnswer && (
@@ -874,12 +1028,13 @@ function SurveyPage() {
                       <input
                         ref={fileInputRef}
                         type="file"
+                        multiple
                         accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
                         onChange={handleFileChange}
                         className="hidden"
                         id="survey-file-upload"
                       />
-                      {!current.fileUrl ? (
+                      {(!current.files || current.files.length === 0) && !current.fileUrl ? (
                         <label
                           htmlFor="survey-file-upload"
                           className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:bg-accent/30 active:scale-[0.98]"
@@ -893,41 +1048,77 @@ function SurveyPage() {
                           </div>
                         </label>
                       ) : (
-                        <div className="flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-card p-3 shadow-sm">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {current.fileType?.startsWith("image/") ? (
-                              <img
-                                src={current.fileUrl}
-                                alt="Preview"
-                                className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
-                              />
-                            ) : current.fileType?.startsWith("video/") ? (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                <Film className="h-7 w-7" />
+                        <div className="space-y-3">
+                          {/* Attached files list */}
+                          <div className="space-y-2">
+                            {(current.files && current.files.length > 0
+                              ? current.files
+                              : [
+                                  {
+                                    fileUrl: current.fileUrl!,
+                                    fileName: current.fileName,
+                                    fileType: current.fileType,
+                                    fileSize: undefined,
+                                  },
+                                ]
+                            ).map((fileItem, fIdx) => (
+                              <div
+                                key={fIdx}
+                                className="flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-card p-3 shadow-sm"
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  {fileItem.fileType?.startsWith("image/") ? (
+                                    <img
+                                      src={fileItem.fileUrl}
+                                      alt="Preview"
+                                      className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
+                                    />
+                                  ) : fileItem.fileType?.startsWith("video/") ? (
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                      <Film className="h-7 w-7" />
+                                    </div>
+                                  ) : (
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                      <Paperclip className="h-7 w-7" />
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-foreground truncate">
+                                      {fileItem.fileName || t.fileAttached}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {fileItem.fileSize
+                                        ? `${(fileItem.fileSize / (1024 * 1024)).toFixed(2)} MB`
+                                        : fileItem.fileType || t.fileAttached}
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSpecificFile(fIdx)}
+                                  className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                                  title={t.removeFile}
+                                  aria-label={t.removeFile}
+                                >
+                                  <X className="h-5 w-5" />
+                                </button>
                               </div>
-                            ) : (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                                <Paperclip className="h-7 w-7" />
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {current.fileName || t.fileAttached}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {current.fileType || t.fileAttached}
-                              </p>
-                            </div>
+                            ))}
                           </div>
-                          <button
-                            type="button"
-                            onClick={handleRemoveFile}
-                            className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
-                            title={t.removeFile}
-                            aria-label={t.removeFile}
-                          >
-                            <X className="h-5 w-5" />
-                          </button>
+
+                          {/* Add more files button & size summary */}
+                          <div className="flex items-center justify-between pt-1">
+                            <label
+                              htmlFor="survey-file-upload"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 cursor-pointer transition-all"
+                            >
+                              <Upload className="h-3.5 w-3.5 text-primary" />
+                              <span>{t.uploadMoreFiles || "Add more files"}</span>
+                            </label>
+                            <span className="text-xs text-muted-foreground">
+                              {current.files?.length || 1} {t.filesAttached || "files attached"} (max 10MB total)
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -941,6 +1132,7 @@ function SurveyPage() {
                   disableAudioRecording={
                     q.id === "name" ||
                     q.id === "phone" ||
+                    q.id === "email" ||
                     q.id === "state" ||
                     q.id === "city"
                   }
