@@ -322,15 +322,26 @@ function AdminPage() {
         r.answers["previous_kumbh"]?.text?.trim() ||
         r.answers["previous_kumbh"]?.choice?.trim();
       if (!val) return;
+      
+      let matched = false;
       if (val.includes("2024") || val.includes("Prayagraj") || val.includes("प्रयागराज")) {
         kumbhCounts["Prayagraj (2024)"] = (kumbhCounts["Prayagraj (2024)"] ?? 0) + 1;
-      } else if (val.includes("2010") || val.includes("Haridwar") || val.includes("हरिद्वार")) {
+        matched = true;
+      }
+      if (val.includes("2010") || val.includes("Haridwar") || val.includes("हरिद्वार")) {
         kumbhCounts["Haridwar (2010)"] = (kumbhCounts["Haridwar (2010)"] ?? 0) + 1;
-      } else if (val.includes("2004") || val.includes("Ujjain") || val.includes("उज्जैन")) {
+        matched = true;
+      }
+      if (val.includes("2004") || val.includes("Ujjain") || val.includes("उज्जैन")) {
         kumbhCounts["Ujjain (2004)"] = (kumbhCounts["Ujjain (2004)"] ?? 0) + 1;
-      } else if (val.includes("2015") || val.includes("Nashik") || val.includes("नासिक") || val.includes("नाशिक")) {
+        matched = true;
+      }
+      if (val.includes("2015") || val.includes("Nashik") || val.includes("नासिक") || val.includes("नाशिक")) {
         kumbhCounts["Nashik (2015)"] = (kumbhCounts["Nashik (2015)"] ?? 0) + 1;
-      } else {
+        matched = true;
+      }
+      
+      if (!matched || val.includes("Have not attended") || val.includes("भाग नहीं लिया") || val.includes("सहभागी झालेलो नाही")) {
         kumbhCounts["First-time Visitor"] = (kumbhCounts["First-time Visitor"] ?? 0) + 1;
       }
     });

@@ -70,6 +70,7 @@ function SurveyPage() {
   // Generate a stable response ID for the entire survey session
   const responseIdRef = useRef<string>(crypto.randomUUID());
   const draftRestoredRef = useRef(false);
+  const prevLangRef = useRef<Lang | null>(null);
 
   // Restore draft on mount if one exists
   useEffect(() => {
@@ -129,6 +130,7 @@ function SurveyPage() {
       setAnswers(restoredAnswers);
       setStep(typeof draft.step === "number" ? draft.step : 0);
       setLang(draft.lang);
+      prevLangRef.current = draft.lang;
 
       toast.success("Draft restored", {
         id: "draft-restored",
@@ -195,8 +197,8 @@ function SurveyPage() {
   const handleLocationDetected = ({ state, city }: { state?: string; city?: string }) => {
     setAnswers((prev) => ({
       ...prev,
-      ...(state ? { state: { ...(prev.state ?? {}), text: state } } : {}),
-      ...(city ? { city: { ...(prev.city ?? {}), text: city } } : {}),
+      ...(state ? { state: { ...(prev["state"] ?? {}), text: state } } : {}),
+      ...(city ? { city: { ...(prev["city"] ?? {}), text: city } } : {}),
     }));
     setError(null);
   };
@@ -290,29 +292,6 @@ function SurveyPage() {
             : "Please enter your name"
         );
         return;
-      }
-      if (name) {
-        if (name.length < 2) {
-          setError(
-            lang === "hi"
-              ? "कृपया कम से कम 2 अक्षरों का मान्य नाम दर्ज करें"
-              : lang === "mr"
-              ? "कृपया किमान 2 अक्षरांचे वैध नाव प्रविष्ट करा"
-              : "Please enter a valid name with at least 2 characters"
-          );
-          return;
-        }
-        const nameRegex = /^[\p{L}\s.'-]+$/u;
-        if (!nameRegex.test(name)) {
-          setError(
-            lang === "hi"
-              ? "नाम में केवल अक्षर होने चाहिए"
-              : lang === "mr"
-              ? "नावात फक्त अक्षरे असावीत"
-              : "Name should only contain letters"
-          );
-          return;
-        }
       }
       setError(null);
       setStep((s) => s + 1);
@@ -554,6 +533,33 @@ function SurveyPage() {
     responseIdRef.current = crypto.randomUUID();
   };
 
+  const handleLanguageSelect = (selectedLang: Lang) => {
+    if (prevLangRef.current && prevLangRef.current !== selectedLang) {
+      // Language changed to a different one, reset everything
+      clearDraft();
+      clearSubmissionStatus();
+      draftRestoredRef.current = false;
+      Object.values(answers).forEach((a) => {
+        if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
+        if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+        if (a.files) {
+          a.files.forEach((f) => {
+            if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
+          });
+        }
+      });
+      audioBlobsRef.current = {};
+      filesRef.current = {};
+      setAnswers({});
+      setStep(0);
+      setSubmitted(false);
+      responseIdRef.current = crypto.randomUUID();
+    }
+    prevLangRef.current = selectedLang;
+    setLang(selectedLang);
+    setShowIntro(true);
+  };
+
   if (submitted) {
     return (
       <Shell>
@@ -600,7 +606,7 @@ function SurveyPage() {
             <button
               key={l.code}
               type="button"
-              onClick={() => { setLang(l.code); setShowIntro(true); }}
+              onClick={() => handleLanguageSelect(l.code)}
               className="w-full flex items-center justify-between rounded-xl border-2 border-border bg-card px-6 py-5 text-left transition-all hover:border-primary hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
             >
               <span className="flex items-center gap-3">
@@ -625,6 +631,7 @@ function SurveyPage() {
   if (showIntro && lang) {
     const introContent = {
       en: {
+        title: "Kumbh Mela – Experience and Suggestions Form",
         greeting: "Dear Sir/Madam,",
         body: "We are collecting information from people who have previously visited or experienced the Kumbh Mela to understand their experiences, challenges, and expectations.\n\nIf you have previously attended the Kumbh Mela, kindly fill out this form and share your experience.",
         bullets: [
@@ -639,6 +646,7 @@ function SurveyPage() {
         changeLang: "Change language",
       },
       hi: {
+        title: "कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म",
         greeting: "प्रिय महोदय / महोदया,",
         body: "हम उन लोगों से जानकारी एकत्र कर रहे हैं जिन्होंने पूर्व में कुंभ मेले में भाग लिया है या कुंभ मेले का अनुभव लिया है, ताकि उनके अनुभव, समस्याओं और अपेक्षाओं को समझा जा सके।\n\nयदि आपने पहले कुंभ मेले में भाग लिया है, तो कृपया इस फ़ॉर्म को भरकर अपना अनुभव साझा करें।",
         bullets: [
@@ -653,6 +661,7 @@ function SurveyPage() {
         changeLang: "भाषा बदलें",
       },
       mr: {
+        title: "कुंभमेळा – अनुभव आणि सूचना फॉर्म",
         greeting: "प्रिय महोदय / महोदया,",
         body: "आम्ही अशा व्यक्तींकडून माहिती गोळा करत आहोत ज्यांनी यापूर्वी कुंभमेळ्यात सहभाग घेतला आहे किंवा कुंभमेळ्याचा अनुभव घेतला आहे, जेणेकरून त्यांचे अनुभव, अडचणी आणि अपेक्षा समजून घेता येतील.\n\nजर तुम्ही यापूर्वी कुंभमेळ्यात सहभागी झाला असाल, तर कृपया हा फॉर्म भरून आपला अनुभव नक्की शेअर करा.",
         bullets: [
@@ -673,6 +682,9 @@ function SurveyPage() {
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-5 pb-4 pt-6">
           {/* Info card */}
           <div className="rounded-2xl border border-border/60 bg-card/85 px-6 py-7 sm:px-8 sm:py-8 shadow-sm">
+            {/* Title */}
+            <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-6 text-center">{intro.title}</h2>
+
             {/* Greeting */}
             <p className="text-base sm:text-xl font-bold text-foreground mb-4">{intro.greeting}</p>
 
@@ -1590,10 +1602,10 @@ function CityInput({
           }
 
           if (onLocationDetected) {
-            onLocationDetected({
-              state: stateLabel || undefined,
-              city: city || undefined,
-            });
+            const loc: { state?: string; city?: string } = {};
+            if (stateLabel) loc.state = stateLabel;
+            if (city) loc.city = city;
+            onLocationDetected(loc);
           }
 
           const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
@@ -1757,10 +1769,10 @@ function StateSelector({
           }
 
           if (onLocationDetected) {
-            onLocationDetected({
-              state: stateLabel || undefined,
-              city: city || undefined,
-            });
+            const loc: { state?: string; city?: string } = {};
+            if (stateLabel) loc.state = stateLabel;
+            if (city) loc.city = city;
+            onLocationDetected(loc);
           }
 
           const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
@@ -1970,8 +1982,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         }}
       />
       <div className="mx-auto w-full max-w-2xl survey-glass-panel flex-1">{children}</div>
-      <footer className="mt-8 text-center text-[11px] sm:text-xs text-muted-foreground/60 select-none tracking-wide">
-        Powered by KKWIEER – MCA
+      <footer className="mt-8 text-center">
+        <p className="text-xs text-muted-foreground">
+          Powered by KKWIEER – MCA
+        </p>
       </footer>
     </main>
   );

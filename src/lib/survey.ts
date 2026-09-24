@@ -291,7 +291,7 @@ export const QUESTIONS: Question[] = [
   },
   {
     id: "previous_kumbh",
-    type: "choice",
+    type: "checkbox",
     label: {
       en: "Have you attended any previous Kumbh Mela?",
       hi: "क्या आपने पहले किसी कुंभ मेले में भाग लिया है?",
