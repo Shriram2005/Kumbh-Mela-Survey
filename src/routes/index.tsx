@@ -28,6 +28,7 @@ import {
   type Lang,
 } from "@/lib/survey";
 import { uploadAudioToS3, uploadFileToS3 } from "@/lib/s3";
+import imageCompression from "browser-image-compression";
 import { saveDraft, loadDraft, clearDraft, markAsSubmitted, hasSubmitted, clearSubmissionStatus } from "@/lib/draft";
 
 export const Route = createFileRoute("/")({
@@ -60,6 +61,8 @@ function SurveyPage() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
   const audioBlobsRef = useRef<Record<string, Blob>>({});
@@ -205,12 +208,38 @@ function SurveyPage() {
 
   const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB total limit across all files
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
+    setIsCompressing(true);
+    let processedFiles: File[] = [];
+
+    try {
+      for (const file of selectedFiles) {
+        if (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp") {
+          const options = {
+            maxSizeMB: 0.5,
+            maxWidthOrHeight: 1280,
+            useWebWorker: true,
+          };
+          try {
+            const compressedFile = await imageCompression(file as File, options);
+            processedFiles.push(compressedFile);
+          } catch (err) {
+            console.error("Image compression error:", err);
+            processedFiles.push(file as File);
+          }
+        } else {
+          processedFiles.push(file as File);
+        }
+      }
+    } finally {
+      setIsCompressing(false);
+    }
+
     const existingFiles = filesRef.current[question.id] || [];
-    const combinedFiles = [...existingFiles, ...selectedFiles];
+    const combinedFiles = [...existingFiles, ...processedFiles];
 
     const totalBytes = combinedFiles.reduce((acc, f) => acc + f.size, 0);
 
@@ -304,6 +333,8 @@ function SurveyPage() {
       if (phone.length > 0) {
         // Strip formatting chars for digit count check
         const digits = phone.replace(/[^\d]/g, "");
+        
+        // Check for exactly 10 digits
         if (digits.length !== 10) {
           const msg =
             lang === "hi"
@@ -311,6 +342,19 @@ function SurveyPage() {
               : lang === "mr"
               ? "कृपया 10 अंकांचा वैध मोबाइल नंबर प्रविष्ट करा"
               : "Please enter a valid 10-digit mobile number";
+          setError(msg);
+          return;
+        }
+        
+        // Validate against repetitive patterns (0000000000, 1111111111, etc.)
+        const isAllSameDigit = /^(\d)\1{9}$/.test(digits);
+        if (isAllSameDigit) {
+          const msg =
+            lang === "hi"
+              ? "कृपया एक वैध मोबाइल नंबर दर्ज करें"
+              : lang === "mr"
+              ? "कृपया वैध मोबाइल नंबर प्रविष्ट करा"
+              : "Please enter a valid mobile number";
           setError(msg);
           return;
         }
@@ -369,16 +413,33 @@ function SurveyPage() {
   const handleConfirmedSubmit = async () => {
     setShowConfirm(false);
     setSubmitting(true);
+    setUploadProgress(null);
     try {
       const finalAnswers: Answers = { ...answers };
+
+      let completedUploads = 0;
+      const totalUploads = 
+        Object.keys(audioBlobsRef.current).length + 
+        Object.values(filesRef.current).reduce((acc, list) => acc + list.length, 0);
+
+      if (totalUploads > 0) {
+        setUploadProgress({ current: 0, total: totalUploads });
+      }
+
+      const incrementProgress = () => {
+        completedUploads++;
+        setUploadProgress({ current: completedUploads, total: totalUploads });
+      };
 
       const audioUploadPromises = Object.entries(audioBlobsRef.current).map(
         async ([qid, blob]) => {
           try {
             const s3Url = await uploadAudioToS3(blob, responseIdRef.current, qid);
+            incrementProgress();
             return { qid, s3Url };
           } catch (err) {
             console.error(`Failed to upload audio for question ${qid} to S3:`, err);
+            incrementProgress();
             return { qid, s3Url: undefined };
           }
         },
@@ -396,6 +457,7 @@ function SurveyPage() {
                 uploadTag,
                 fileName,
               );
+              incrementProgress();
               return {
                 qid,
                 s3Url,
@@ -405,6 +467,7 @@ function SurveyPage() {
               };
             } catch (err) {
               console.error(`Failed to upload file for question ${qid} to S3:`, err);
+              incrementProgress();
               return {
                 qid,
                 s3Url: undefined,
@@ -508,6 +571,7 @@ function SurveyPage() {
       console.error("Submit error:", err);
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -877,7 +941,12 @@ function SurveyPage() {
                           autoComplete="tel"
                           value={current.text}
                           onChange={(e) => {
-                            const val = e.target.value.replace(/[^\d\s\-()]/g, "");
+                            let val = e.target.value.replace(/[^\d\s\-()]/g, "");
+                            // Extract only digits and limit to 10
+                            const digits = val.replace(/[^\d]/g, "");
+                            if (digits.length > 10) {
+                              val = val.slice(0, -1);
+                            }
                             update({ text: val });
                           }}
                           onKeyDown={(e) => {
@@ -1068,6 +1137,8 @@ function SurveyPage() {
                   <div className="space-y-3">
                     {q.options![lang].map((opt, optIdx) => {
                       const isOther = (q.id === "reason" || q.id === "challenges") && optIdx === q.options![lang].length - 1;
+                      const isPreviousKumbhNone =
+                        q.id === "previous_kumbh" && optIdx === q.options![lang].length - 1;
                       const selectedList = current.text
                         ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
                         : [];
@@ -1085,12 +1156,19 @@ function SurveyPage() {
                               s.startsWith("इतर - ")
                           )
                         : selectedList.includes(opt);
+                        const hasPreviousKumbhSelection =
+                          q.id === "previous_kumbh" &&
+                          selectedList.some((selection) => selection !== q.options![lang][q.options![lang].length - 1]);
+                        const isDisabled = isPreviousKumbhNone && hasPreviousKumbhSelection;
 
                       return (
                         <button
                           key={opt}
                           type="button"
+                          disabled={isDisabled}
                           onClick={() => {
+                            if (isDisabled) return;
+
                             let nextList: string[];
                             if (isOther) {
                               if (isChecked) {
@@ -1116,12 +1194,23 @@ function SurveyPage() {
                             } else {
                               nextList = isChecked
                                 ? selectedList.filter((s) => s !== opt)
-                                : [...selectedList, opt];
+                                : [
+                                    ...selectedList.filter(
+                                      (selection) =>
+                                        !(
+                                          q.id === "previous_kumbh" &&
+                                          selection === q.options![lang][q.options![lang].length - 1]
+                                        )
+                                    ),
+                                    opt,
+                                  ];
                               update({ text: nextList.join(", ") });
                             }
                           }}
                           className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
-                            isChecked
+                            isDisabled
+                              ? "cursor-not-allowed border-border bg-muted/50 opacity-50"
+                              : isChecked
                               ? "border-primary bg-primary/10 shadow-md"
                               : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
                           }`}
@@ -1233,7 +1322,7 @@ function SurveyPage() {
                 )}
 
                 {/* Voice Input */}
-                {q.id !== "state" && (
+                {q.id !== "state" && q.id !== "phone" && (
                   <VoiceInput
                     lang={lang}
                     questionType={q.type}
@@ -1279,19 +1368,30 @@ function SurveyPage() {
                         multiple
                         accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
                         onChange={handleFileChange}
+                        disabled={isCompressing}
                         className="hidden"
                         id="survey-file-upload"
                       />
                       {(!current.files || current.files.length === 0) && !current.fileUrl ? (
                         <label
                           htmlFor="survey-file-upload"
-                          className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-card shadow-sm p-6 text-center cursor-pointer transition-all hover:border-primary/60 hover:shadow-md active:scale-[0.98]"
+                          className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-card shadow-sm p-6 text-center transition-all ${
+                            isCompressing
+                              ? "cursor-wait opacity-70"
+                              : "cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-[0.98]"
+                          }`}
                         >
                           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <Upload className="h-6 w-6" />
+                            {isCompressing ? (
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                            ) : (
+                              <Upload className="h-6 w-6" />
+                            )}
                           </div>
                           <div>
-                            <p className="text-sm sm:text-base font-medium text-foreground">{t.uploadFile}</p>
+                            <p className="text-sm sm:text-base font-medium text-foreground">
+                              {isCompressing ? "Compressing files..." : t.uploadFile}
+                            </p>
                             <p className="mt-1 text-xs sm:text-sm text-muted-foreground">{t.uploadHint}</p>
                           </div>
                         </label>
@@ -1357,11 +1457,21 @@ function SurveyPage() {
                           {/* Add more files button & size summary */}
                           <div className="flex items-center justify-between pt-1">
                             <label
-                              htmlFor="survey-file-upload"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-border bg-card hover:bg-accent hover:border-primary/40 cursor-pointer transition-all"
+                              htmlFor={!isCompressing ? "survey-file-upload" : undefined}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-border bg-card transition-all ${
+                                isCompressing
+                                  ? "opacity-50 cursor-wait"
+                                  : "hover:bg-accent hover:border-primary/40 cursor-pointer"
+                              }`}
                             >
-                              <Upload className="h-3.5 w-3.5 text-primary" />
-                              <span>{t.uploadMoreFiles || "Add more files"}</span>
+                              {isCompressing ? (
+                                <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+                              ) : (
+                                <Upload className="h-3.5 w-3.5 text-primary" />
+                              )}
+                              <span>
+                                {isCompressing ? "Compressing..." : t.uploadMoreFiles || "Add more files"}
+                              </span>
                             </label>
                             <span className="text-xs text-muted-foreground">
                               {current.files?.length || 1} {t.filesAttached || "files attached"} (max 10MB total)
@@ -1393,12 +1503,18 @@ function SurveyPage() {
                   <button
                     type="button"
                     onClick={goNext}
-                    disabled={submitting}
+                    disabled={submitting || isCompressing}
                     className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
                   >
-                    {submitting && <Loader2 className="h-5 w-5 animate-spin" />}
-                    <span>{step === total - 1 ? t.submit : t.next}</span>
-                    {!submitting && step < total - 1 && <ChevronRight className="h-5 w-5" />}
+                    {(submitting || isCompressing) && <Loader2 className="h-5 w-5 animate-spin" />}
+                    <span>
+                      {submitting && uploadProgress && uploadProgress.total > 0
+                        ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...`
+                        : step === total - 1
+                        ? t.submit
+                        : t.next}
+                    </span>
+                    {!(submitting || isCompressing) && step < total - 1 && <ChevronRight className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
