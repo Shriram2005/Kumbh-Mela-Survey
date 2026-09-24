@@ -11,8 +11,10 @@ import {
   X,
   Search,
   ChevronDown,
+  MapPin,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
+import confetti from "canvas-confetti";
 import { VoiceInput } from "@/components/VoiceInput";
 import {
   LANGUAGES,
@@ -190,6 +192,15 @@ function SurveyPage() {
     setError(null);
   };
 
+  const handleLocationDetected = ({ state, city }: { state?: string; city?: string }) => {
+    setAnswers((prev) => ({
+      ...prev,
+      ...(state ? { state: { ...(prev.state ?? {}), text: state } } : {}),
+      ...(city ? { city: { ...(prev.city ?? {}), text: city } } : {}),
+    }));
+    setError(null);
+  };
+
   const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB total limit across all files
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,6 +290,29 @@ function SurveyPage() {
             : "Please enter your name"
         );
         return;
+      }
+      if (name) {
+        if (name.length < 2) {
+          setError(
+            lang === "hi"
+              ? "कृपया कम से कम 2 अक्षरों का मान्य नाम दर्ज करें"
+              : lang === "mr"
+              ? "कृपया किमान 2 अक्षरांचे वैध नाव प्रविष्ट करा"
+              : "Please enter a valid name with at least 2 characters"
+          );
+          return;
+        }
+        const nameRegex = /^[\p{L}\s.'-]+$/u;
+        if (!nameRegex.test(name)) {
+          setError(
+            lang === "hi"
+              ? "नाम में केवल अक्षर होने चाहिए"
+              : lang === "mr"
+              ? "नावात फक्त अक्षरे असावीत"
+              : "Name should only contain letters"
+          );
+          return;
+        }
       }
       setError(null);
       setStep((s) => s + 1);
@@ -482,6 +516,15 @@ function SurveyPage() {
       filesRef.current = {};
 
       setSubmitted(true);
+      
+      // Fire confetti party animation
+      confetti({
+        particleCount: 150,
+        spread: 80,
+        origin: { y: 0.5 },
+        colors: ['#16a34a', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6'],
+        zIndex: 9999,
+      });
     } catch (err) {
       console.error("Submit error:", err);
     } finally {
@@ -815,6 +858,8 @@ function SurveyPage() {
                           +91
                         </span>
                         <input
+                          id="phone"
+                          name="phone"
                           type="tel"
                           inputMode="tel"
                           autoComplete="tel"
@@ -832,6 +877,8 @@ function SurveyPage() {
                       </div>
                     ) : q.id === "email" ? (
                       <input
+                        id="email"
+                        name="email"
                         type="email"
                         inputMode="email"
                         autoComplete="email"
@@ -847,12 +894,24 @@ function SurveyPage() {
                       <StateSelector
                         value={current.text ?? ""}
                         onChange={(val) => update({ text: val })}
+                        onLocationDetected={handleLocationDetected}
+                        lang={lang}
+                        t={t}
+                        onEnter={goNext}
+                      />
+                    ) : q.id === "city" ? (
+                      <CityInput
+                        value={current.text ?? ""}
+                        onChange={(val) => update({ text: val })}
+                        onLocationDetected={handleLocationDetected}
                         lang={lang}
                         t={t}
                         onEnter={goNext}
                       />
                     ) : (
                       <input
+                        id={q.id === "name" ? "name" : undefined}
+                        name={q.id === "name" ? "name" : undefined}
                         type="text"
                         inputMode="text"
                         autoComplete={q.id === "name" ? "name" : undefined}
@@ -996,7 +1055,7 @@ function SurveyPage() {
                 {q.type === "checkbox" && (
                   <div className="space-y-3">
                     {q.options![lang].map((opt, optIdx) => {
-                      const isOther = q.id === "reason" && optIdx === q.options![lang].length - 1;
+                      const isOther = (q.id === "reason" || q.id === "challenges") && optIdx === q.options![lang].length - 1;
                       const selectedList = current.text
                         ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
                         : [];
@@ -1072,7 +1131,7 @@ function SurveyPage() {
                     })}
 
                     {/* Primary Reason conditional input field if Other is selected */}
-                    {q.id === "reason" && (() => {
+                    {(q.id === "reason" || q.id === "challenges") && (() => {
                       const otherOpt = q.options![lang][q.options![lang].length - 1]!;
                       const selectedList = current.text
                         ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
@@ -1158,7 +1217,49 @@ function SurveyPage() {
                         />
                       </div>
                     )}
+                  </div>
+                )}
 
+                {/* Voice Input */}
+                {q.id !== "state" && (
+                  <VoiceInput
+                    lang={lang}
+                    questionType={q.type}
+                    disableAudioRecording={
+                      q.id === "name" ||
+                      q.id === "phone" ||
+                      q.id === "email" ||
+                      q.id === "state" ||
+                      q.id === "city"
+                    }
+                    existingText={current.text}
+                    onTranscript={(text) =>
+                      update({ text: current.text ? `${current.text} ${text}` : text })
+                    }
+                    audioUrl={current.audioUrl}
+                    onRecordingChange={setIsRecordingAudio}
+                    onAudio={(blob, previewUrl) => {
+                      if (blob && previewUrl) {
+                        audioBlobsRef.current[q.id] = blob;
+                        update({ text: "", audioUrl: previewUrl });
+                      } else {
+                        delete audioBlobsRef.current[q.id];
+                        update({ audioUrl: undefined });
+                      }
+                    }}
+                    onRecordStart={() => {
+                      if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
+                        URL.revokeObjectURL(current.audioUrl);
+                      }
+                      delete audioBlobsRef.current[q.id];
+                      update({ text: "", audioUrl: undefined });
+                    }}
+                  />
+                )}
+
+                {/* Final Question: Multi-File Upload */}
+                {q.type === "file_text" && (
+                  <div className="mt-4">
                     <div>
                       <input
                         ref={fileInputRef}
@@ -1260,43 +1361,6 @@ function SurveyPage() {
                   </div>
                 )}
 
-                {/* Voice Input */}
-                {q.id !== "state" && (
-                  <VoiceInput
-                    lang={lang}
-                    questionType={q.type}
-                    disableAudioRecording={
-                      q.id === "name" ||
-                      q.id === "phone" ||
-                      q.id === "email" ||
-                      q.id === "state" ||
-                      q.id === "city"
-                    }
-                    existingText={current.text}
-                    onTranscript={(text) =>
-                      update({ text: current.text ? `${current.text} ${text}` : text })
-                    }
-                    audioUrl={current.audioUrl}
-                    onRecordingChange={setIsRecordingAudio}
-                    onAudio={(blob, previewUrl) => {
-                      if (blob && previewUrl) {
-                        audioBlobsRef.current[q.id] = blob;
-                        update({ text: "", audioUrl: previewUrl });
-                      } else {
-                        delete audioBlobsRef.current[q.id];
-                        update({ audioUrl: undefined });
-                      }
-                    }}
-                    onRecordStart={() => {
-                      if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
-                        URL.revokeObjectURL(current.audioUrl);
-                      }
-                      delete audioBlobsRef.current[q.id];
-                      update({ text: "", audioUrl: undefined });
-                    }}
-                  />
-                )}
-
                 {/* Error Message */}
                 {error && (
                   <div className="mt-4 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20">
@@ -1366,7 +1430,7 @@ function SurveyPage() {
               <button
                 type="button"
                 onClick={handleConfirmedSubmit}
-                className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-[0.97]"
+                className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-700 text-white shadow-md transition-all active:scale-[0.97]"
               >
                 {t.confirmYes}
               </button>
@@ -1378,21 +1442,246 @@ function SurveyPage() {
   );
 }
 
-function StateSelector({
+
+
+async function reverseGeocodeLocation(
+  latitude: number,
+  longitude: number
+): Promise<{ state: string; city: string }> {
+  let state = "";
+  let city = "";
+
+  // 1. Try BigDataCloud reverse geocode client API
+  try {
+    const res = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+    );
+    if (res.ok) {
+      const data = await res.json();
+      state = data.principalSubdivision || "";
+      
+      city = data.city || data.locality || "";
+
+      if (!city && Array.isArray(data.localityInfo?.administrative)) {
+        const adminList = data.localityInfo.administrative;
+        const candidate = adminList.find(
+          (a: any) =>
+            (a.adminLevel === 6 || a.adminLevel === 8 || a.adminLevel === 7 || a.adminLevel === 5) &&
+            a.name &&
+            !a.name.toLowerCase().includes("india") &&
+            a.name.toLowerCase() !== state.toLowerCase()
+        );
+        if (candidate) {
+          city = candidate.name;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("BigDataCloud geocode error:", err);
+  }
+
+  // 2. Try OpenStreetMap Nominatim fallback if city or state is missing
+  if (!state || !city) {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=14`,
+        {
+          headers: {
+            "Accept-Language": "en",
+          },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const addr = data.address || {};
+        if (!state) state = addr.state || "";
+        if (!city) {
+          const rawCity =
+            addr.city ||
+            addr.town ||
+            addr.municipality ||
+            addr.suburb ||
+            addr.village ||
+            addr.county ||
+            addr.state_district ||
+            "";
+          city = rawCity;
+        }
+      }
+    } catch (err) {
+      console.warn("Nominatim geocode error:", err);
+    }
+  }
+
+  // Clean city name (strip administrative suffixes like "District", "Division", etc.)
+  if (city) {
+    city = city.replace(/\s*(District|Division|Taluka|Tahsil|Mandal|Corporation|City)\s*$/gi, "").trim();
+  }
+
+  return { state, city };
+}
+
+function findStateOption(detectedState: string): StateOption | undefined {
+  if (!detectedState) return undefined;
+  const cleanDetected = detectedState
+    .toLowerCase()
+    .replace(/state of|state|\bpradesh\b/gi, "")
+    .trim();
+
+  return INDIAN_STATES.find((s) => {
+    const enLower = s.en.toLowerCase();
+    const cleanEn = enLower.replace(/\bpradesh\b/gi, "").trim();
+    return (
+      enLower === detectedState.toLowerCase() ||
+      enLower.includes(detectedState.toLowerCase()) ||
+      detectedState.toLowerCase().includes(enLower) ||
+      (cleanDetected.length > 2 && cleanEn.includes(cleanDetected))
+    );
+  });
+}
+
+function CityInput({
   value,
   onChange,
+  onLocationDetected,
   lang,
   t,
   onEnter,
 }: {
   value: string;
   onChange: (val: string) => void;
+  onLocationDetected?: (loc: { state?: string; city?: string }) => void;
+  lang: Lang;
+  t: (typeof UI)[Lang];
+  onEnter: () => void;
+}) {
+  const [isLocating, setIsLocating] = useState(false);
+
+  const handleDetectCity = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      toast.error(t.locationError || "Geolocation is not supported");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const { state, city } = await reverseGeocodeLocation(latitude, longitude);
+
+          if (!city && !state) {
+            toast.error(t.locationError || "Could not detect city from location.");
+            setIsLocating(false);
+            return;
+          }
+
+          const matched = findStateOption(state);
+          const stateLabel = matched
+            ? lang === "hi"
+              ? matched.hi
+              : lang === "mr"
+              ? matched.mr
+              : matched.en
+            : state;
+
+          if (city) {
+            onChange(city);
+          }
+
+          if (onLocationDetected) {
+            onLocationDetected({
+              state: stateLabel || undefined,
+              city: city || undefined,
+            });
+          }
+
+          const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
+          toast.success(`${t.locationDetected || "Detected: "}${displayLoc}`);
+        } catch (err) {
+          console.error("Geocoding error:", err);
+          toast.error(t.locationError || "Could not detect city.");
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error(
+            t.locationDenied || "Location permission denied. Please enter manually."
+          );
+        } else {
+          toast.error(
+            t.locationError || "Location request timed out or unavailable."
+          );
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-end mb-1">
+        <button
+          type="button"
+          onClick={handleDetectCity}
+          disabled={isLocating}
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50 active:scale-95"
+          title={t.detectLocation || "Use current location"}
+        >
+          {isLocating ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            <MapPin className="w-3.5 h-3.5" />
+          )}
+          <span>
+            {isLocating
+              ? t.detectingLocation || "Detecting..."
+              : t.detectLocation || "Use current location"}
+          </span>
+        </button>
+      </div>
+      <input
+        id="city"
+        name="city"
+        type="text"
+        inputMode="text"
+        autoComplete="address-level2"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onEnter();
+          }
+        }}
+        placeholder={t.cityPlaceholder || t.yourAnswer}
+        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+      />
+    </div>
+  );
+}
+
+function StateSelector({
+  value,
+  onChange,
+  onLocationDetected,
+  lang,
+  t,
+  onEnter,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  onLocationDetected?: (loc: { state?: string; city?: string }) => void;
   lang: Lang;
   t: (typeof UI)[Lang];
   onEnter: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -1441,6 +1730,66 @@ function StateSelector({
     setIsOpen(false);
   };
 
+  const handleDetectLocation = () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      toast.error(t.locationError || "Geolocation is not supported");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const { state, city } = await reverseGeocodeLocation(latitude, longitude);
+
+          if (!state && !city) {
+            toast.error(t.locationError || "Could not detect state from location.");
+            setIsLocating(false);
+            return;
+          }
+
+          const matched = findStateOption(state);
+          const stateLabel = matched ? getStateLabel(matched) : state;
+
+          if (stateLabel) {
+            onChange(stateLabel);
+          }
+
+          if (onLocationDetected) {
+            onLocationDetected({
+              state: stateLabel || undefined,
+              city: city || undefined,
+            });
+          }
+
+          const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
+          toast.success(`${t.locationDetected || "Detected: "}${displayLoc}`);
+        } catch (err) {
+          console.error("Geocoding error:", err);
+          toast.error(t.locationError || "Could not detect location.");
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (err) => {
+        setIsLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error(
+            t.locationDenied ||
+              "Location permission denied. Please select manually."
+          );
+        } else {
+          toast.error(
+            t.locationError ||
+              "Location request timed out or unavailable."
+          );
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+    );
+  };
+
   return (
     <div className="space-y-4 text-left" ref={containerRef}>
       {/* 1-Tap Popular States Chips */}
@@ -1479,9 +1828,29 @@ function StateSelector({
 
       {/* Searchable Dropdown / Custom Input */}
       <div className="relative">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">
-          {t.allStates || "All States & UTs"}
-        </label>
+        <div className="flex items-center justify-between mb-1.5">
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+            {t.allStates || "All States & UTs"}
+          </label>
+          <button
+            type="button"
+            onClick={handleDetectLocation}
+            disabled={isLocating}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50 active:scale-95"
+            title={t.detectLocation || "Use current location"}
+          >
+            {isLocating ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <MapPin className="w-3.5 h-3.5" />
+            )}
+            <span>
+              {isLocating
+                ? t.detectingLocation || "Detecting..."
+                : t.detectLocation || "Use current location"}
+            </span>
+          </button>
+        </div>
 
         <div className="relative flex items-center">
           <input
