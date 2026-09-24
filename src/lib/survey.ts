@@ -437,9 +437,9 @@ export const QUESTIONS: Question[] = [
     id: "time_help",
     type: "longtext",
     label: {
-      en: "How much time did you spend in Prayagraj? Did you get help from local authorities?",
-      hi: "आपने प्रयागराज में कितना समय बिताया? क्या स्थानीय प्रशासन से सहायता मिली?",
-      mr: "तुम्ही प्रयागराजमध्ये किती वेळ घालवला? स्थानिक प्रशासनाकडून मदत मिळाली का?",
+      en: "How much time did you spend at the Kumbh Mela? Did you get help from local authorities?",
+      hi: "आपने कुंभ मेले में कितना समय बिताया? क्या स्थानीय प्रशासन से सहायता मिली?",
+      mr: "तुम्ही कुंभमेळ्यात किती वेळ घालवला? स्थानिक प्रशासनाकडून मदत मिळाली का?",
     },
   },
   {
