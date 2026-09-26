@@ -1137,6 +1137,8 @@ function SurveyPage() {
                   <div className="space-y-3">
                     {q.options![lang].map((opt, optIdx) => {
                       const isOther = (q.id === "reason" || q.id === "challenges") && optIdx === q.options![lang].length - 1;
+                      const isPreviousKumbhNone =
+                        q.id === "previous_kumbh" && optIdx === q.options![lang].length - 1;
                       const selectedList = current.text
                         ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
                         : [];
@@ -1154,12 +1156,19 @@ function SurveyPage() {
                               s.startsWith("इतर - ")
                           )
                         : selectedList.includes(opt);
+                        const hasPreviousKumbhSelection =
+                          q.id === "previous_kumbh" &&
+                          selectedList.some((selection) => selection !== q.options![lang][q.options![lang].length - 1]);
+                        const isDisabled = isPreviousKumbhNone && hasPreviousKumbhSelection;
 
                       return (
                         <button
                           key={opt}
                           type="button"
+                          disabled={isDisabled}
                           onClick={() => {
+                            if (isDisabled) return;
+
                             let nextList: string[];
                             if (isOther) {
                               if (isChecked) {
@@ -1185,12 +1194,23 @@ function SurveyPage() {
                             } else {
                               nextList = isChecked
                                 ? selectedList.filter((s) => s !== opt)
-                                : [...selectedList, opt];
+                                : [
+                                    ...selectedList.filter(
+                                      (selection) =>
+                                        !(
+                                          q.id === "previous_kumbh" &&
+                                          selection === q.options![lang][q.options![lang].length - 1]
+                                        )
+                                    ),
+                                    opt,
+                                  ];
                               update({ text: nextList.join(", ") });
                             }
                           }}
                           className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
-                            isChecked
+                            isDisabled
+                              ? "cursor-not-allowed border-border bg-muted/50 opacity-50"
+                              : isChecked
                               ? "border-primary bg-primary/10 shadow-md"
                               : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
                           }`}
