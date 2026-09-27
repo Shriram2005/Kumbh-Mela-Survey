@@ -1021,6 +1021,41 @@ function SurveyPage() {
                   </div>
                 )}
 
+                {q.type === "number_unit" && (
+                  <div className="flex gap-3">
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={current.details ?? ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const unit = current.choice || q.options![lang][0];
+                          update({ details: val, choice: unit, text: val ? `${val} ${unit}` : "" });
+                        }}
+                        placeholder="e.g. 2"
+                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                      />
+                    </div>
+                    <div className="flex-1 relative">
+                      <select
+                        value={current.choice || q.options![lang][0]}
+                        onChange={(e) => {
+                          const unit = e.target.value;
+                          const val = current.details ?? "";
+                          update({ choice: unit, details: val, text: val ? `${val} ${unit}` : "" });
+                        }}
+                        className="w-full px-4 py-3.5 pr-10 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 appearance-none"
+                      >
+                        {q.options![lang].map((opt) => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+                    </div>
+                  </div>
+                )}
+
                 {q.type === "rating" && (
                   <div className="flex flex-wrap gap-3 justify-center">
                     {[1, 2, 3, 4, 5].map((n) => (
@@ -1055,7 +1090,7 @@ function SurveyPage() {
                           key={opt}
                           type="button"
                           onClick={() => {
-                            if (q.id === "medical_needed") {
+                            if (q.id === "medical_needed" || q.id === "local_help") {
                               if (isYesOption) {
                                 const details = current.details ?? "";
                                 update({
@@ -1096,14 +1131,14 @@ function SurveyPage() {
                       );
                     })}
 
-                    {/* Q9 conditional input field if Yes is selected */}
-                    {q.id === "medical_needed" &&
+                    {/* conditional input field if Yes is selected */}
+                    {(q.id === "medical_needed" || q.id === "local_help") &&
                       (current.choice === q.options![lang][0] ||
                         current.text === q.options![lang][0] ||
                         Boolean(current.text?.startsWith(q.options![lang][0] + " - "))) && (
                         <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border">
                           <label className="block text-sm font-medium text-foreground mb-2">
-                            {t.specifyMedical}
+                            {q.id === "medical_needed" ? t.specifyMedical : t.specifyReason}
                           </label>
                           <input
                             value={
@@ -1124,7 +1159,7 @@ function SurveyPage() {
                                 text: formatted,
                               });
                             }}
-                            placeholder={t.specifyMedical}
+                            placeholder={q.id === "medical_needed" ? t.specifyMedical : t.specifyReason}
                             className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
                           />
                         </div>

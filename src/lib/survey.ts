@@ -1,6 +1,6 @@
 export type Lang = "en" | "hi" | "mr";
 
-export type QuestionType = "text" | "longtext" | "rating" | "choice" | "checkbox" | "file_text";
+export type QuestionType = "text" | "longtext" | "rating" | "choice" | "checkbox" | "file_text" | "number_unit";
 
 export interface Question {
   id: string;
@@ -45,7 +45,7 @@ export const UI = {
     skip: "Skip",
     specifyMedical: "Please specify the medical assistance needed...",
     specifyReason: "Please specify...",
-    uploadFile: "Upload photo, video, or document",
+    uploadFile: "Upload photo, video, or document you want to share",
     uploadMoreFiles: "Add more files",
     chooseFile: "Choose file",
     noFileChosen: "No file chosen",
@@ -102,7 +102,7 @@ export const UI = {
     skip: "छोड़ें",
     specifyMedical: "कृपया आवश्यक चिकित्सा सहायता का विवरण दें...",
     specifyReason: "कृपया कारण लिखें...",
-    uploadFile: "फ़ोटो, वीडियो या दस्तावेज़ अपलोड करें",
+    uploadFile: "फ़ोटो, वीडियो या दस्तावेज़ अपलोड करें जो आप साझा करना चाहते हैं",
     uploadMoreFiles: "और फ़ाइलें जोड़ें",
     chooseFile: "फ़ाइल चुनें",
     noFileChosen: "कोई फ़ाइल नहीं चुनी गई",
@@ -159,7 +159,7 @@ export const UI = {
     skip: "वगळा",
     specifyMedical: "कृपया आवश्यक वैद्यकीय मदतीचा तपशील द्या...",
     specifyReason: "कृपया कारण लिहा...",
-    uploadFile: "फोटो, व्हिडिओ किंवा कागदपत्र अपलोड करा",
+    uploadFile: "तुम्हाला शेअर करायचे असलेले फोटो, व्हिडिओ किंवा कागदपत्र अपलोड करा",
     uploadMoreFiles: "आणखी फाईल्स जोडा",
     chooseFile: "फाईल निवडा",
     noFileChosen: "कोणतीही फाईल निवडलेली नाही",
@@ -372,9 +372,9 @@ export const QUESTIONS: Question[] = [
       mr: "निवास व स्वच्छतेबाबत तुम्ही किती समाधानी होता?",
     },
     options: {
-      en: ["Very Satisfied", "Satisfied", "Neutral", "Dissatisfied", "Very Dissatisfied"],
-      hi: ["बहुत संतुष्ट", "संतुष्ट", "तटस्थ", "असंतोषजनक", "बहुत असंतुष्ट"],
-      mr: ["खूप समाधानी", "समाधानी", "तटस्थ", "असमाधानी", "खूप असमाधानी"],
+      en: ["Satisfied", "Neutral", "Dissatisfied", "Did not use"],
+      hi: ["संतुष्ट", "तटस्थ", "असंतोषजनक", "उपयोग नहीं किया"],
+      mr: ["समाधानी", "तटस्थ", "असमाधानी", "वापर केला नाही"],
     },
   },
   {
@@ -400,9 +400,9 @@ export const QUESTIONS: Question[] = [
       mr: "वैद्यकीय/आपत्कालीन सुविधा पुरेशा होत्या का?",
     },
     options: {
-      en: ["Very Adequate", "Adequate", "Neutral", "Inadequate", "Very Inadequate"],
-      hi: ["अत्यंत पर्याप्त", "पर्याप्त", "तटस्थ", "अपर्याप्त", "बहुत अपर्याप्त"],
-      mr: ["अतिशय पुरेसे", "पुरेसे", "तटस्थ", "अपुरे", "खूप अपुरे"],
+      en: ["Adequate", "Neutral", "Inadequate", "Did not use"],
+      hi: ["पर्याप्त", "तटस्थ", "अपर्याप्त", "उपयोग नहीं किया"],
+      mr: ["पुरेसे", "तटस्थ", "अपुरे", "वापर केला नाही"],
     },
   },
   {
@@ -428,18 +428,37 @@ export const QUESTIONS: Question[] = [
       mr: "गर्दी व्यवस्थापनाला गुण द्या:",
     },
     options: {
-      en: ["Excellent", "Good", "Fair", "Poor", "Very Poor"],
-      hi: ["उत्कृष्ट", "अच्छा", "सामान्य", "खराब", "बहुत खराब"],
-      mr: ["उत्कृष्ट", "चांगले", "साधारण", "वाईट", "खूप वाईट"],
+      en: ["Good", "Fair", "Poor"],
+      hi: ["अच्छा", "सामान्य", "खराब"],
+      mr: ["चांगले", "साधारण", "वाईट"],
     },
   },
   {
-    id: "time_help",
-    type: "longtext",
+    id: "time_spent",
+    type: "number_unit",
     label: {
-      en: "How much time did you spend at the Kumbh Mela? Did you get help from local authorities?",
-      hi: "आपने कुंभ मेले में कितना समय बिताया? क्या स्थानीय प्रशासन से सहायता मिली?",
-      mr: "तुम्ही कुंभमेळ्यात किती वेळ घालवला? स्थानिक प्रशासनाकडून मदत मिळाली का?",
+      en: "How much time did you spend at the Kumbh Mela?",
+      hi: "आपने कुंभ मेले में कितना समय बिताया?",
+      mr: "तुम्ही कुंभमेळ्यात किती वेळ घालवला?",
+    },
+    options: {
+      en: ["Hours", "Days", "Months"],
+      hi: ["घंटे", "दिन", "महीने"],
+      mr: ["तास", "दिवस", "महिने"],
+    },
+  },
+  {
+    id: "local_help",
+    type: "choice",
+    label: {
+      en: "Did you get help from local authorities? (If yes, please specify)",
+      hi: "क्या स्थानीय प्रशासन से सहायता मिली? (यदि हाँ, तो कृपया उल्लेख करें)",
+      mr: "स्थानिक प्रशासनाकडून मदत मिळाली का? (होय असल्यास, कृपया नमूद करा)",
+    },
+    options: {
+      en: ["Yes", "No"],
+      hi: ["हाँ", "नहीं"],
+      mr: ["होय", "नाही"],
     },
   },
   {
@@ -451,9 +470,9 @@ export const QUESTIONS: Question[] = [
       mr: "वाहतूक सेवा पुरेशा होत्या का?",
     },
     options: {
-      en: ["Very Adequate", "Adequate", "Neutral", "Inadequate", "Very Inadequate"],
-      hi: ["अत्यंत पर्याप्त", "पर्याप्त", "तटस्थ", "अपर्याप्त", "बहुत अपर्याप्त"],
-      mr: ["अतिशय पुरेसे", "पुरेसे", "तटस्थ", "अपुरे", "खूप अपुरे"],
+      en: ["Adequate", "Neutral", "Inadequate", "Did not use"],
+      hi: ["पर्याप्त", "तटस्थ", "अपर्याप्त", "उपयोग नहीं किया"],
+      mr: ["पुरेसे", "तटस्थ", "अपुरे", "वापर केला नाही"],
     },
   },
   {
@@ -502,7 +521,7 @@ export const QUESTIONS: Question[] = [
     id: "utilities",
     type: "choice",
     label: {
-      en: "Did you get continuous electricity & internet?",
+      en: "Did you get continuous electricity and internet?",
       hi: "क्या आपको निरंतर बिजली और इंटरनेट मिला?",
       mr: "तुम्हाला सतत वीज व इंटरनेट मिळाले का?",
     },
