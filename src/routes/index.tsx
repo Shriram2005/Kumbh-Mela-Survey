@@ -618,7 +618,6 @@ function SurveyPage() {
       <Shell>
         <div className="text-center mb-6 sm:mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
             <span>K K Wagh MCA · Research Questionnaire</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight">
@@ -668,16 +667,16 @@ function SurveyPage() {
       en: {
         institution: "K K Wagh Institute of Engineering Education and Research, Nashik",
         dept: "Department of MCA",
-        date: "Date: September 2026",
         title: "Kumbh Mela – Experience and Suggestions Form",
-        greeting: "Dear Sir/Madam, Greeting…!!!!",
-        body: "If you have previously experienced the Kumbh Mela, kindly fill out this form.\n\nYour response will directly help improve planning and facilities for future Kumbh Mela events, so that pilgrims attending the upcoming Nashik Kumbh Mela receive better services.",
+        greeting: "Dear Sir/Madam,",
+        body: "If you have previously experienced the Kumbh Mela, kindly fill out this Form.",
         bullets: [
           "Your response will help improve planning and facilities for future Kumbh Mela events.",
           "The pilgrims attending the upcoming Nashik Kumbh Mela can receive better services.",
           "If you know someone who has attended, kindly share the QR code/link with friends, relatives, and neighbors.",
-          "Please provide accurate information based on your own experience.",
         ],
+        structureDesc:
+          "The survey is structured into five sections to systematically capture visitors’ background, experiences and challenges, technology-related aspects, and their overall impact and suggestions.",
         sections: [
           "A. Visitor Background and Visit Details",
           "B. Facilities and Visitor Experience",
@@ -691,16 +690,16 @@ function SurveyPage() {
       hi: {
         institution: "के के वाघ इंस्टीट्यूट ऑफ इंजीनियरिंग एजुकेशन एंड रिसर्च, नासिक",
         dept: "एमसीए विभाग",
-        date: "दिनांक: सितंबर 2026",
         title: "कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म",
-        greeting: "प्रिय महोदय / महोदया, सादर प्रणाम…!!!!",
-        body: "यदि आपने पूर्व में कुंभ मेले का अनुभव लिया है, तो कृपया इस फ़ॉर्म को भरें।\n\nआपकी प्रतिक्रिया भविष्य के कुंभ मेला आयोजनों के नियोजन और सुविधाओं में सुधार करने में सहायक होगी, जिससे आगामी नासिक कुंभ मेले में आने वाले तीर्थयात्रियों को बेहतर सेवाएं प्राप्त हो सकेंगी।",
+        greeting: "प्रिय महोदय / महोदया,\nसादर प्रणाम…!!!!",
+        body: "यदि आपने पूर्व में कुंभ मेले का अनुभव लिया है, तो कृपया इस फ़ॉर्म को भरें।",
         bullets: [
           "आपकी प्रतिक्रिया भविष्य के कुंभ मेला आयोजनों की योजना और सुविधाओं को बेहतर बनाएगी।",
           "आगामी नासिक कुंभ मेले में भाग लेने वाले श्रद्धालुओं को उत्कृष्ट सेवाएं मिल सकेंगी।",
-          "यदि आप किसी ऐसे व्यक्ति को जानते हैं जिन्होंने कुंभ मेले में भाग लिया है, तो कृपया यह लिंक/क्यूआर कोड साझा करें।",
-          "कृपया अपने स्वयं के अनुभव के आधार पर सटीक जानकारी प्रदान करें।",
+          "यदि आप किसी ऐसे व्यक्ति को जानते हैं जिन्होंने कुंभ मेले में भाग लिया है, तो कृपया यह लिंक / क्यूआर कोड मित्रों, रिश्तेदारों और पड़ोसियों के साथ साझा करें।",
         ],
+        structureDesc:
+          "यह सर्वेक्षण आगंतुकों की पृष्ठभूमि, अनुभव एवं चुनौतियों, प्रौद्योगिकी संबंधी पहलुओं और उनके समग्र प्रभाव व सुझावों को व्यवस्थित रूप से दर्ज करने के लिए पांच खंडों में संरचित है:",
         sections: [
           "खंड अ: आगंतुक पृष्ठभूमि और यात्रा विवरण",
           "खंड ब: सुविधाएं और आगंतुक अनुभव",
@@ -714,16 +713,16 @@ function SurveyPage() {
       mr: {
         institution: "के के वाघ इन्स्टिट्यूट ऑफ इंजिनिअरिंग एज्युकेशन अँड रिसर्च, नाशिक",
         dept: "एमसीए विभाग",
-        date: "दिनांक: सप्टेंबर २०२६",
         title: "कुंभमेळा – अनुभव आणि सूचना फॉर्म",
-        greeting: "प्रिय महोदय / महोदया, सस्नेह नमस्कार…!!!!",
-        body: "जर तुम्ही यापूर्वी कुंभमेळ्याचा अनुभव घेतला असेल, तर कृपया हा फॉर्म भरावा.\n\nतुमच्या बहुमूल्य प्रतिसादामुळे भविष्यातील कुंभमेळा आयोजनांचे नियोजन आणि सुविधा सुधारण्यास मदत होईल, जेणेकरून आगामी नाशिक कुंभमेळ्यात येणाऱ्या भाविकांना अधिक दर्जेदार सेवा व सुविधा मिळू शकतील.",
+        greeting: "प्रिय महोदय / महोदया,\nसस्नेह नमस्कार…!!!!",
+        body: "जर तुम्ही यापूर्वी कुंभमेळ्याचा अनुभव घेतला असेल, तर कृपया हा फॉर्म भरावा.",
         bullets: [
           "तुमचा प्रतिसाद भविष्यातील कुंभमेळा आयोजनांचे नियोजन व सुविधा सुधारण्यास मदत करेल.",
-          "आगामी नाशिक कुंभमेळ्यात सहभागी होणाऱ्या भाविकांना अधिक चांगल्या सुविधा मिळू शकतील.",
-          "जर तुम्ही अशा कोणाला ओळखत असाल ज्यांनी कुंभमेळ्यास भेट दिली आहे, तर कृपया ही लिंक/क्यूआर कोड नक्की शेअर करा.",
-          "कृपया आपल्या स्वतःच्या अनुभवावर आधारित खरी आणि अचूक माहिती द्यावी.",
+          "आगामी नासिक कुंभमेळ्यात सहभागी होणाऱ्या भाविकांना अधिक चांगल्या सुविधा मिळू शकतील.",
+          "जर तुम्ही अशा कोणाला ओळखत असाल ज्यांनी कुंभमेळ्यास भेट दिली आहे, तर कृपया ही लिंक / क्यूआर कोड मित्र, नातेवाईक आणि शेजाऱ्यांसोबत नक्की शेअर करा.",
         ],
+        structureDesc:
+          "हे सर्वेक्षण अभ्यागतांची पार्श्वभूमी, अनुभव आणि आव्हाने, तंत्रज्ञानविषयक पैलू आणि त्यांचा एकूण प्रभाव व सूचना पद्धतशीरपणे नोंदवण्यासाठी पाच विभागांमध्ये विभागलेले आहे:",
         sections: [
           "विभाग अ: अभ्यागतांची पार्श्वभूमी आणि भेटीचा तपशील",
           "विभाग ब: सुविधा आणि अभ्यागतांचा अनुभव",
@@ -748,7 +747,7 @@ function SurveyPage() {
                 {intro.institution}
               </p>
               <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-0.5">
-                {intro.dept} · {intro.date}
+                {intro.dept}
               </p>
               <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
                 {intro.title}
@@ -756,36 +755,38 @@ function SurveyPage() {
             </div>
 
             {/* Greeting & Body */}
-            <p className="text-base sm:text-lg font-bold text-foreground mb-2.5">{intro.greeting}</p>
-            <div className="space-y-2.5 mb-4">
-              {intro.body.split("\n\n").map((para, i) => (
-                <p key={i} className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-                  {para}
+            <div className="mb-2 space-y-0.5">
+              {intro.greeting.split("\n").map((line, i) => (
+                <p key={i} className="text-sm sm:text-base text-foreground leading-relaxed">
+                  {line}
                 </p>
               ))}
             </div>
 
+            <p className="text-sm sm:text-base text-foreground mb-3 leading-relaxed">
+              {intro.body}
+            </p>
+
             {/* Bullets */}
-            <ul className="space-y-2 mb-5">
+            <ul className="space-y-2 mb-4">
               {intro.bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-foreground">
-                  <span className="shrink-0 text-primary font-bold mt-0.5">➤</span>
-                  <span>{b}</span>
+                <li key={i} className="flex items-start gap-2 text-sm sm:text-base text-foreground">
+                  <span className="shrink-0 text-foreground select-none">→</span>
+                  <span className="leading-relaxed">{b}</span>
                 </li>
               ))}
             </ul>
 
             {/* Structure Overview */}
-            <div className="rounded-xl bg-muted/40 border border-border/60 p-3.5 sm:p-4">
-              <p className="text-xs sm:text-sm font-semibold text-foreground uppercase tracking-wider mb-2">
-                {t.sectionOverview}
+            <div className="pt-1 space-y-3">
+              <p className="text-sm sm:text-base text-foreground leading-relaxed">
+                {intro.structureDesc}
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-muted-foreground">
+              <div className="pl-4 sm:pl-6 space-y-1.5 text-sm sm:text-base text-foreground">
                 {intro.sections.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
-                    <span className="font-medium text-foreground">{s}</span>
-                  </div>
+                  <p key={i} className="leading-relaxed">
+                    {s}
+                  </p>
                 ))}
               </div>
             </div>
@@ -865,8 +866,8 @@ function SurveyPage() {
                       Edit
                     </button>
                   </div>
-                  <div className="mt-1 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl rounded-tl-sm bg-amber-200/70 dark:bg-amber-950/40 border border-border shadow-xs">
-                    <p className="text-[13px] sm:text-sm leading-relaxed text-foreground">
+                  <div className="mt-1 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl rounded-tl-sm bg-amber-200/70 dark:bg-amber-950/40 border border-border shadow-xs">
+                    <p className="text-[15px] sm:text-base leading-relaxed text-foreground">
                       {q.label[lang]}
                     </p>
                   </div>
@@ -875,9 +876,9 @@ function SurveyPage() {
 
               <div className="flex justify-end">
                 <div className="max-w-[90%] sm:max-w-[75%]">
-                  <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-xs">
+                  <div className="px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-xs">
                     {ans?.text ? (
-                      <p className="text-[13px] sm:text-sm leading-relaxed whitespace-pre-line break-words">
+                      <p className="text-[15px] sm:text-base leading-relaxed whitespace-pre-line break-words">
                         {ans.text}
                       </p>
                     ) : null}
@@ -914,25 +915,34 @@ function SurveyPage() {
           ref={activeQuestionRef}
           className="animate-in fade-in slide-in-from-bottom-3 duration-400 pt-1"
         >
-          {/* Question Bubble & Section Badge */}
+          {/* Question Bubble & Minimal Section Header */}
           <div className="mb-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-xl rounded-br-xl bg-muted/80 border border-border/50 text-[11px] font-semibold">
-              <span className="uppercase tracking-wider text-primary">
-                {currentSection.letter} · {currentSection.title[lang]}
-              </span>
-              <span className="text-muted-foreground/40">|</span>
-              <span className="text-foreground">
-                {t.question} {step + 1} {t.of} {total}
-              </span>
-              {!isRequired && (
-                <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted">
-                  {t.optional}
+            <div className="flex items-center justify-between gap-2 px-1 mb-2">
+              {/* Section tag: compact on mobile, full section on tablet+ */}
+              <div className="inline-flex items-center gap-1.5 min-w-0">
+                <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-md bg-primary/10 text-primary text-[10px] sm:text-[11px] font-semibold tracking-wider shrink-0">
+                  SECTION {currentSection.letter}
                 </span>
-              )}
+                <span className="hidden sm:inline text-xs font-medium text-muted-foreground truncate max-w-[260px]">
+                  {currentSection.title[lang].replace(/^(Section|खंड|विभाग)\s+[A-E]\s*[–-]\s*/i, "")}
+                </span>
+              </div>
+
+              {/* Progress & Optional Indicator */}
+              <div className="inline-flex items-center gap-2 shrink-0">
+                <span className="text-xs font-semibold text-foreground">
+                  {step + 1} <span className="text-muted-foreground font-normal">/ {total}</span>
+                </span>
+                {!isRequired && (
+                  <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted/80 border border-border/50">
+                    {t.optional}
+                  </span>
+                )}
+              </div>
             </div>
 
-            <div className="mt-1 px-4 py-3.5 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-amber-200/70 dark:bg-amber-950/40 border-2 border-primary/25 shadow-sm">
-              <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-semibold">
+            <div className="px-5 py-4 sm:px-6 sm:py-5 rounded-2xl bg-amber-200/70 dark:bg-amber-950/40 border-2 border-primary/25 shadow-sm">
+              <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
                 {question.label[lang]}
                 {isRequired && (
                   <span className="text-destructive ml-1.5 font-bold" title={t.required}>
@@ -1083,7 +1093,7 @@ function SurveyPage() {
             {/* Single Choice (Radio) */}
             {question.type === "choice" && (
               <div
-                className="space-y-2.5"
+                className="space-y-2"
                 role="radiogroup"
                 aria-label={question.label[lang]}
               >
@@ -1113,7 +1123,7 @@ function SurveyPage() {
                           update({ choice: opt, text: opt, details: "" });
                         }
                       }}
-                      className={`w-full min-h-[52px] flex items-center gap-3.5 px-4 sm:px-5 py-3.5 text-left text-sm sm:text-base rounded-xl border-2 transition-all ${
+                      className={`w-full min-h-[46px] sm:min-h-[48px] flex items-center gap-3.5 sm:gap-4 px-4 sm:px-5 py-2.5 sm:py-3 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
                         isSelected
                           ? "border-primary bg-primary/10 shadow-sm"
                           : "border-border bg-card hover:border-primary/40 active:scale-[0.98]"
@@ -1144,7 +1154,7 @@ function SurveyPage() {
                       )
                     )) && (
                     <div className="mt-2.5 p-3.5 rounded-xl bg-muted/40 border border-border animate-in fade-in">
-                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                      <label className="block text-sm font-medium text-foreground mb-1.5">
                         {t.specifyOther}
                       </label>
                       <input
@@ -1161,7 +1171,7 @@ function SurveyPage() {
                           });
                         }}
                         placeholder={t.specifyOther}
-                        className="w-full min-h-[46px] px-3.5 py-2.5 text-sm sm:text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        className="w-full min-h-[48px] px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
                       />
                     </div>
                   )}
@@ -1171,7 +1181,7 @@ function SurveyPage() {
             {/* Multiple Choice Checkboxes */}
             {question.type === "checkbox" && (
               <div
-                className="space-y-2.5"
+                className="space-y-2"
                 role="group"
                 aria-label={question.label[lang]}
               >
@@ -1250,7 +1260,7 @@ function SurveyPage() {
                           update({ text: nextList.join(", ") });
                         }
                       }}
-                      className={`w-full min-h-[52px] flex items-center gap-3.5 px-4 sm:px-5 py-3.5 text-left text-sm sm:text-base rounded-xl border-2 transition-all ${
+                      className={`w-full min-h-[46px] sm:min-h-[48px] flex items-center gap-3.5 sm:gap-4 px-4 sm:px-5 py-2.5 sm:py-3 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
                         isChecked
                           ? "border-primary bg-primary/10 shadow-sm"
                           : "border-border bg-card hover:border-primary/40 active:scale-[0.98]"
@@ -1305,7 +1315,7 @@ function SurveyPage() {
 
                   return (
                     <div className="mt-2.5 p-3.5 rounded-xl bg-muted/40 border border-border animate-in fade-in">
-                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                      <label className="block text-sm font-medium text-foreground mb-1.5">
                         {t.specifyOther}
                       </label>
                       <input
@@ -1331,7 +1341,7 @@ function SurveyPage() {
                           });
                         }}
                         placeholder={t.specifyOther}
-                        className="w-full min-h-[46px] px-3.5 py-2.5 text-sm sm:text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
+                        className="w-full min-h-[48px] px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
                       />
                     </div>
                   );
@@ -1465,7 +1475,11 @@ function SurveyPage() {
                 <VoiceInput
                   lang={lang}
                   questionType={question.type}
-                  disableAudioRecording={question.id === "name" || question.id === "phone"}
+                  disableAudioRecording={
+                    question.id === "name" ||
+                    question.id === "phone" ||
+                    question.id === "city"
+                  }
                   existingText={current.text}
                   onTranscript={(text) =>
                     update({ text: current.text ? `${current.text} ${text}` : text })
@@ -1741,8 +1755,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       />
       <div className="mx-auto w-full max-w-2xl survey-glass-panel flex-1">{children}</div>
       <footer className="mt-6 sm:mt-8 text-center space-y-1 px-2">
-        <p className="text-xs font-semibold text-foreground/80">
-          K K Wagh Institute of Engineering Education and Research, Nashik · Department of MCA
+        <p className="text-xs text-muted-foreground text-foreground/80">
+          KKWIEER – MCA
         </p>
         <p className="text-[11px] text-muted-foreground">
           Kumbh Mela Research & Visitor Experience Survey
