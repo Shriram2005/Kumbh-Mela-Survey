@@ -9,9 +9,8 @@ import {
   Paperclip,
   Film,
   X,
-  Search,
-  ChevronDown,
   MapPin,
+  Sparkles,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import confetti from "canvas-confetti";
@@ -19,8 +18,7 @@ import { VoiceInput } from "@/components/VoiceInput";
 import {
   LANGUAGES,
   QUESTIONS,
-  INDIAN_STATES,
-  type StateOption,
+  SECTIONS,
   UI,
   saveResponse,
   type Answers,
@@ -29,27 +27,49 @@ import {
 } from "@/lib/survey";
 import { uploadAudioToS3, uploadFileToS3 } from "@/lib/s3";
 import imageCompression from "browser-image-compression";
-import { saveDraft, loadDraft, clearDraft, markAsSubmitted, hasSubmitted, clearSubmissionStatus } from "@/lib/draft";
+import {
+  saveDraft,
+  loadDraft,
+  clearDraft,
+  markAsSubmitted,
+  hasSubmitted,
+  clearSubmissionStatus,
+} from "@/lib/draft";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Kumbh Mela Visitor Survey | Share Your Experience" },
+      { title: "Kumbh Mela Visitor Survey | Experience & Suggestions" },
       {
         name: "description",
         content:
-          "Answer a short Kumbh Mela visitor survey in English, Hindi or Marathi. Reply by typing, voice typing or an audio recording.",
+          "K K Wagh Institute of Engineering Education and Research - Department of MCA: Kumbh Mela Experience and Suggestions Survey.",
       },
       { property: "og:title", content: "Kumbh Mela Visitor Survey" },
       {
         property: "og:description",
         content:
-          "Share your Kumbh Mela experience in English, Hindi or Marathi — type or answer with your voice.",
+          "Share your Kumbh Mela experience in English, Hindi, or Marathi to help improve facilities for the upcoming Nashik Kumbh Mela.",
       },
     ],
   }),
   component: SurveyPage,
 });
+
+const QUICK_CITIES = [
+  "Nashik",
+  "Trimbakeshwar",
+  "Prayagraj",
+  "Haridwar",
+  "Ujjain",
+  "Pune",
+  "Mumbai",
+  "Delhi",
+  "Varanasi",
+  "Nagpur",
+  "Indore",
+  "Ahmedabad",
+];
 
 function SurveyPage() {
   const [lang, setLang] = useState<Lang | null>(null);
@@ -64,27 +84,24 @@ function SurveyPage() {
   const [isCompressing, setIsCompressing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Audio blobs kept in memory during form filling — zero uploads to AWS until final submit
+  // In-memory audio blobs & file handles
   const audioBlobsRef = useRef<Record<string, Blob>>({});
-  // Attached files kept in memory until final submit (supports multiple files per question)
   const filesRef = useRef<Record<string, (File | Blob)[]>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Generate a stable response ID for the entire survey session
   const responseIdRef = useRef<string>(crypto.randomUUID());
   const draftRestoredRef = useRef(false);
   const prevLangRef = useRef<Lang | null>(null);
 
-  // Restore draft on mount if one exists
+  // Restore draft on mount
   useEffect(() => {
     let active = true;
-    
-    // Check if user has already submitted
+
     if (hasSubmitted()) {
       setSubmitted(true);
       return;
     }
-    
+
     loadDraft().then((draft) => {
       if (!active || !draft || !draft.lang || draftRestoredRef.current) return;
       draftRestoredRef.current = true;
@@ -92,7 +109,6 @@ function SurveyPage() {
       const restoredAnswers: Answers = { ...draft.answers };
       if (draft.audioBlobs) {
         audioBlobsRef.current = { ...draft.audioBlobs };
-        // Re-instantiate local object URLs for audio playback
         Object.entries(draft.audioBlobs).forEach(([qid, blob]) => {
           if (restoredAnswers[qid]) {
             restoredAnswers[qid] = {
@@ -131,7 +147,7 @@ function SurveyPage() {
       }
       responseIdRef.current = draft.responseId || crypto.randomUUID();
       setAnswers(restoredAnswers);
-      setStep(typeof draft.step === "number" ? draft.step : 0);
+      setStep(typeof draft.step === "number" ? Math.min(draft.step, QUESTIONS.length - 1) : 0);
       setLang(draft.lang);
       prevLangRef.current = draft.lang;
 
@@ -146,7 +162,7 @@ function SurveyPage() {
     };
   }, []);
 
-  // Auto-save draft whenever answers, step, or language updates
+  // Auto-save draft
   useEffect(() => {
     if (!lang || submitted) return;
     saveDraft({
@@ -162,10 +178,10 @@ function SurveyPage() {
 
   const activeQuestionRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto-scroll to newly revealed active question when step changes
+  // Smooth auto-scroll to the top of the active question on mobile
   useEffect(() => {
     if (activeQuestionRef.current) {
-      activeQuestionRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      activeQuestionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [step]);
 
@@ -184,10 +200,12 @@ function SurveyPage() {
   const hasAudioAnswer = Boolean(current.audioUrl) || isRecordingAudio;
 
   const isRequired =
-    question.id === "name" ||
-    (question.type !== "text" &&
-      question.type !== "longtext" &&
+    question.required ??
+    (question.type !== "longtext" &&
+      question.type !== "file_upload" &&
       question.type !== "file_text");
+
+  const currentSection = SECTIONS[question.section];
 
   const update = (patch: Partial<Answer>) => {
     setAnswers((prev) => ({
@@ -197,41 +215,36 @@ function SurveyPage() {
     setError(null);
   };
 
-  const handleLocationDetected = ({ state, city }: { state?: string; city?: string }) => {
-    setAnswers((prev) => ({
-      ...prev,
-      ...(state ? { state: { ...(prev["state"] ?? {}), text: state } } : {}),
-      ...(city ? { city: { ...(prev["city"] ?? {}), text: city } } : {}),
-    }));
-    setError(null);
-  };
-
-  const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB total limit across all files
+  const MAX_TOTAL_FILE_SIZE = 10 * 1024 * 1024; // 10MB total limit
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
     if (selectedFiles.length === 0) return;
 
     setIsCompressing(true);
-    let processedFiles: File[] = [];
+    const processedFiles: File[] = [];
 
     try {
       for (const file of selectedFiles) {
-        if (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp") {
+        if (
+          file.type === "image/jpeg" ||
+          file.type === "image/png" ||
+          file.type === "image/webp"
+        ) {
           const options = {
-            maxSizeMB: 0.5,
-            maxWidthOrHeight: 1280,
+            maxSizeMB: 0.6,
+            maxWidthOrHeight: 1600,
             useWebWorker: true,
           };
           try {
-            const compressedFile = await imageCompression(file as File, options);
-            processedFiles.push(compressedFile);
+            const compressed = await imageCompression(file, options);
+            processedFiles.push(compressed);
           } catch (err) {
-            console.error("Image compression error:", err);
-            processedFiles.push(file as File);
+            console.error("Compression error:", err);
+            processedFiles.push(file);
           }
         } else {
-          processedFiles.push(file as File);
+          processedFiles.push(file);
         }
       }
     } finally {
@@ -240,7 +253,6 @@ function SurveyPage() {
 
     const existingFiles = filesRef.current[question.id] || [];
     const combinedFiles = [...existingFiles, ...processedFiles];
-
     const totalBytes = combinedFiles.reduce((acc, f) => acc + f.size, 0);
 
     if (totalBytes > MAX_TOTAL_FILE_SIZE) {
@@ -272,6 +284,7 @@ function SurveyPage() {
       fileUrl: fileItems[0]?.fileUrl,
       fileName: fileItems[0]?.fileName,
       fileType: fileItems[0]?.fileType,
+      text: fileItems.length > 0 ? `${fileItems.length} file(s) attached` : "",
     });
     e.target.value = "";
   };
@@ -295,6 +308,7 @@ function SurveyPage() {
         fileUrl: nextItems[0]?.fileUrl,
         fileName: nextItems[0]?.fileName,
         fileType: nextItems[0]?.fileType,
+        text: `${nextItems.length} file(s) attached`,
       });
     } else {
       delete filesRef.current[question.id];
@@ -303,23 +317,18 @@ function SurveyPage() {
         fileUrl: undefined,
         fileName: undefined,
         fileType: undefined,
+        text: "",
       });
     }
   };
 
   const goNext = async () => {
-    // Name validation — compulsory / required
+    // Q1: Name validation
     if (question.id === "name") {
       const name = current.text?.trim() ?? "";
       const hasAudio = Boolean(current.audioUrl);
       if (!name && !hasAudio) {
-        setError(
-          lang === "hi"
-            ? "कृपया अपना नाम दर्ज करें"
-            : lang === "mr"
-            ? "कृपया तुमचे नाव प्रविष्ट करा"
-            : "Please enter your name"
-        );
+        setError(t.nameRequired);
         return;
       }
       setError(null);
@@ -327,80 +336,50 @@ function SurveyPage() {
       return;
     }
 
-    // Phone validation — optional but must be valid if filled
+    // Q2: Mobile Number validation
     if (question.id === "phone") {
       const phone = current.text?.trim() ?? "";
-      if (phone.length > 0) {
-        // Strip formatting chars for digit count check
-        const digits = phone.replace(/[^\d]/g, "");
-        
-        // Check for exactly 10 digits
-        if (digits.length !== 10) {
-          const msg =
-            lang === "hi"
-              ? "कृपया 10 अंकों का वैध मोबाइल नंबर दर्ज करें"
-              : lang === "mr"
-              ? "कृपया 10 अंकांचा वैध मोबाइल नंबर प्रविष्ट करा"
-              : "Please enter a valid 10-digit mobile number";
-          setError(msg);
-          return;
-        }
-        
-        // Validate against repetitive patterns (0000000000, 1111111111, etc.)
-        const isAllSameDigit = /^(\d)\1{9}$/.test(digits);
-        if (isAllSameDigit) {
-          const msg =
-            lang === "hi"
-              ? "कृपया एक वैध मोबाइल नंबर दर्ज करें"
-              : lang === "mr"
-              ? "कृपया वैध मोबाइल नंबर प्रविष्ट करा"
-              : "Please enter a valid mobile number";
-          setError(msg);
-          return;
-        }
-      }
-      // Phone is optional — valid empty or valid number → proceed
-      setError(null);
-      setStep((s) => s + 1);
-      return;
-    }
+      let digits = phone.replace(/[^\d]/g, "");
+      if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
+      else if (digits.length > 10 && digits.startsWith("0")) digits = digits.slice(1);
 
-    // Email validation — optional but must be valid format if filled
-    if (question.id === "email") {
-      const email = current.text?.trim() ?? "";
-      if (email.length > 0) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-          const msg =
-            lang === "hi"
-              ? "कृपया एक मान्य ईमेल पता दर्ज करें"
-              : lang === "mr"
-              ? "कृपया वैध ईमेल पत्ता प्रविष्ट करा"
-              : "Please enter a valid email address";
-          setError(msg);
-          return;
-        }
+      const isRepetitive = /^(\d)\1{9}$/.test(digits);
+
+      if (digits.length !== 10 || isRepetitive) {
+        setError(t.phoneRequired);
+        return;
       }
       setError(null);
       setStep((s) => s + 1);
       return;
     }
 
-    // Required questions check
-    if (isRequired) {
-      const hasText = Boolean(current.text?.trim());
+    // Q3: City validation
+    if (question.id === "city") {
+      const city = current.text?.trim() ?? "";
       const hasAudio = Boolean(current.audioUrl);
-      if (!hasText && !hasAudio) {
-        setError(
-          lang === "hi"
-            ? "यह प्रश्न आवश्यक है"
-            : lang === "mr"
-            ? "हा प्रश्न आवश्यक आहे"
-            : "This question is required"
-        );
+      if (!city && !hasAudio) {
+        setError(t.cityRequired);
+        return;
+      }
+      setError(null);
+      setStep((s) => s + 1);
+      return;
+    }
+
+    // General Required check for single-choice, multiple-choice, number_unit
+    if (isRequired) {
+      const hasText = Boolean(current.text?.trim() || current.choice?.trim());
+      const hasAudio = Boolean(current.audioUrl);
+      const hasFiles =
+        Boolean(current.files && current.files.length > 0) || Boolean(current.fileUrl);
+
+      if (!hasText && !hasAudio && !hasFiles) {
+        setError(t.required);
         return;
       }
     }
+
     setError(null);
 
     if (step === total - 1) {
@@ -414,12 +393,13 @@ function SurveyPage() {
     setShowConfirm(false);
     setSubmitting(true);
     setUploadProgress(null);
+
     try {
       const finalAnswers: Answers = { ...answers };
 
       let completedUploads = 0;
-      const totalUploads = 
-        Object.keys(audioBlobsRef.current).length + 
+      const totalUploads =
+        Object.keys(audioBlobsRef.current).length +
         Object.values(filesRef.current).reduce((acc, list) => acc + list.length, 0);
 
       if (totalUploads > 0) {
@@ -438,35 +418,38 @@ function SurveyPage() {
             incrementProgress();
             return { qid, s3Url };
           } catch (err) {
-            console.error(`Failed to upload audio for question ${qid} to S3:`, err);
+            console.error(`Audio upload failed for ${qid}:`, err);
             incrementProgress();
             return { qid, s3Url: undefined };
           }
-        },
+        }
       );
 
       const fileUploadPromises = Object.entries(filesRef.current).flatMap(
         ([qid, filesList]) => {
           return filesList.map(async (fileOrBlob, idx) => {
             try {
-              const fileName = fileOrBlob instanceof File ? fileOrBlob.name : undefined;
-              const uploadTag = filesList.length > 1 ? `${qid}_${idx + 1}` : qid;
+              const fileName =
+                fileOrBlob instanceof File
+                  ? fileOrBlob.name
+                  : `file_${idx}_${Date.now()}.bin`;
+              const fileType = fileOrBlob.type || "application/octet-stream";
               const s3Url = await uploadFileToS3(
                 fileOrBlob,
                 responseIdRef.current,
-                uploadTag,
-                fileName,
+                `${qid}_${idx}`,
+                fileName
               );
               incrementProgress();
               return {
                 qid,
                 s3Url,
-                fileName: fileName || `file_${idx + 1}`,
-                fileType: fileOrBlob.type || "application/octet-stream",
+                fileName,
+                fileType,
                 fileSize: fileOrBlob.size,
               };
             } catch (err) {
-              console.error(`Failed to upload file for question ${qid} to S3:`, err);
+              console.error(`File upload failed for ${qid} [${idx}]:`, err);
               incrementProgress();
               return {
                 qid,
@@ -477,7 +460,7 @@ function SurveyPage() {
               };
             }
           });
-        },
+        }
       );
 
       const [audioResults, fileResults] = await Promise.all([
@@ -485,19 +468,17 @@ function SurveyPage() {
         Promise.all(fileUploadPromises),
       ]);
 
-      for (const { qid, s3Url } of audioResults) {
-        if (finalAnswers[qid] && s3Url) {
+      audioResults.forEach(({ qid, s3Url }) => {
+        if (s3Url && finalAnswers[qid]) {
           finalAnswers[qid] = { ...finalAnswers[qid], audioUrl: s3Url };
-        } else if (finalAnswers[qid]) {
-          const { audioUrl: _blobUrl, ...rest } = finalAnswers[qid] as any;
-          finalAnswers[qid] = rest;
         }
-      }
+      });
 
       const fileResultsByQid: Record<
         string,
-        Array<{ fileUrl: string; fileName?: string; fileType?: string; fileSize?: number }>
+        { fileUrl: string; fileName?: string; fileType?: string; fileSize?: number }[]
       > = {};
+
       for (const res of fileResults) {
         if (res.s3Url) {
           const list = fileResultsByQid[res.qid] ?? [];
@@ -522,15 +503,6 @@ function SurveyPage() {
               fileName: uploadedFiles[0]?.fileName,
               fileType: uploadedFiles[0]?.fileType,
             };
-          } else {
-            const {
-              fileUrl: _fileBlobUrl,
-              fileName: _fn,
-              fileType: _ft,
-              files: _fls,
-              ...rest
-            } = finalAnswers[qid] as any;
-            finalAnswers[qid] = rest;
           }
         }
       });
@@ -546,29 +518,27 @@ function SurveyPage() {
       await clearDraft();
 
       Object.values(answers).forEach((a) => {
-        if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
-        if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
-        if (a.files) {
-          a.files.forEach((f) => {
-            if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
-          });
-        }
+        if (a.audioUrl?.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
+        if (a.fileUrl?.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+        a.files?.forEach((f) => {
+          if (f.fileUrl?.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
+        });
       });
       audioBlobsRef.current = {};
       filesRef.current = {};
 
       setSubmitted(true);
-      
-      // Fire confetti party animation
+
       confetti({
-        particleCount: 150,
+        particleCount: 160,
         spread: 80,
         origin: { y: 0.5 },
-        colors: ['#16a34a', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6'],
+        colors: ["#f59e0b", "#16a34a", "#3b82f6", "#ec4899", "#8b5cf6"],
         zIndex: 9999,
       });
     } catch (err) {
       console.error("Submit error:", err);
+      toast.error("Failed to submit response. Please try again.");
     } finally {
       setSubmitting(false);
       setUploadProgress(null);
@@ -580,13 +550,11 @@ function SurveyPage() {
     clearSubmissionStatus();
     draftRestoredRef.current = false;
     Object.values(answers).forEach((a) => {
-      if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
-      if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
-      if (a.files) {
-        a.files.forEach((f) => {
-          if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
-        });
-      }
+      if (a.audioUrl?.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
+      if (a.fileUrl?.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
+      a.files?.forEach((f) => {
+        if (f.fileUrl?.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
+      });
     });
     audioBlobsRef.current = {};
     filesRef.current = {};
@@ -599,19 +567,9 @@ function SurveyPage() {
 
   const handleLanguageSelect = (selectedLang: Lang) => {
     if (prevLangRef.current && prevLangRef.current !== selectedLang) {
-      // Language changed to a different one, reset everything
       clearDraft();
       clearSubmissionStatus();
       draftRestoredRef.current = false;
-      Object.values(answers).forEach((a) => {
-        if (a.audioUrl && a.audioUrl.startsWith("blob:")) URL.revokeObjectURL(a.audioUrl);
-        if (a.fileUrl && a.fileUrl.startsWith("blob:")) URL.revokeObjectURL(a.fileUrl);
-        if (a.files) {
-          a.files.forEach((f) => {
-            if (f.fileUrl && f.fileUrl.startsWith("blob:")) URL.revokeObjectURL(f.fileUrl);
-          });
-        }
-      });
       audioBlobsRef.current = {};
       filesRef.current = {};
       setAnswers({});
@@ -624,46 +582,55 @@ function SurveyPage() {
     setShowIntro(true);
   };
 
+  // ─── Submitted View ──────────────────────────────────────────────────────────
   if (submitted) {
     return (
       <Shell>
         <div className="text-center py-8 animate-in fade-in zoom-in duration-500">
-          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6">
-            <Check className="h-10 w-10" />
+          <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6 shadow-sm">
+            <Check className="h-10 w-10 stroke-[2.5]" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-3">
             {t.thanks}
           </h1>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-md mx-auto leading-relaxed">
             {t.thanksBody}
           </p>
-          <button
-            type="button"
-            onClick={restart}
-            className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-xl text-base font-medium text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all active:scale-[0.97]"
-          >
-            <span>{t.another}</span>
-            <ChevronRight className="h-5 w-5" />
-          </button>
+
+          <div className="mt-8 pt-6 border-t border-border/50">
+            <button
+              type="button"
+              onClick={restart}
+              className="inline-flex items-center gap-2 min-h-[48px] px-6 py-3.5 rounded-xl text-base font-semibold text-primary border-2 border-primary hover:bg-primary hover:text-primary-foreground transition-all active:scale-[0.97] shadow-sm"
+            >
+              <span>{t.another}</span>
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </Shell>
     );
   }
 
+  // ─── Language Selection Screen ───────────────────────────────────────────────
   if (!lang) {
     return (
       <Shell>
-        <div className="text-center mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h1 className="text-2xl sm:text-3xl font-semibold text-foreground">
+        <div className="text-center mb-6 sm:mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>K K Wagh MCA · Research Questionnaire</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight">
             Kumbh Mela – Experience and Suggestions Form
           </h1>
-          <p className="mt-2 text-sm sm:text-base text-muted-foreground">
+          <p className="mt-2 text-base text-muted-foreground font-medium">
             कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म
           </p>
         </div>
-        
-        <div className="space-y-3 animate-in fade-in slide-in-from-bottom-6 duration-700">
-          <p className="text-center text-sm sm:text-base font-medium text-foreground mb-4">
+
+        <div className="space-y-3.5 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          <p className="text-center text-sm sm:text-base font-medium text-foreground mb-3">
             Choose your language · अपनी भाषा चुनें · तुमची भाषा निवडा
           </p>
           {LANGUAGES.map((l) => (
@@ -671,123 +638,174 @@ function SurveyPage() {
               key={l.code}
               type="button"
               onClick={() => handleLanguageSelect(l.code)}
-              className="w-full flex items-center justify-between rounded-xl border-2 border-border bg-card px-6 py-5 text-left transition-all hover:border-primary hover:shadow-md hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full min-h-[64px] flex items-center justify-between rounded-2xl border-2 border-border bg-card px-5 sm:px-6 py-4 sm:py-5 text-left transition-all hover:border-primary hover:shadow-md hover:scale-[1.01] active:scale-[0.98]"
+              aria-label={`Select ${l.label}`}
             >
-              <span className="flex items-center gap-3">
-                <span className="text-2xl">🌐</span>
+              <span className="flex items-center gap-3.5 sm:gap-4">
+                <span className="flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-primary/10 text-2xl shrink-0">
+                  🌐
+                </span>
                 <span>
-                  <span className="block text-lg font-semibold text-foreground">{l.native}</span>
-                  <span className="block text-sm text-muted-foreground">{l.label}</span>
+                  <span className="block text-lg font-bold text-foreground">{l.native}</span>
+                  <span className="block text-xs sm:text-sm text-muted-foreground">{l.label}</span>
                 </span>
               </span>
-              <ChevronRight className="h-6 w-6 text-muted-foreground" />
+              <ChevronRight className="h-6 w-6 text-muted-foreground shrink-0" />
             </button>
           ))}
         </div>
-        
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          Your feedback helps improve the experience for millions of pilgrims
+
+        <p className="mt-8 text-center text-xs text-muted-foreground px-2">
+          Your feedback will help improve planning and services for upcoming Kumbh Mela events
         </p>
       </Shell>
     );
   }
 
+  // ─── Intro Screen with PDF Sections Overview ────────────────────────────────
   if (showIntro && lang) {
     const introContent = {
       en: {
+        institution: "K K Wagh Institute of Engineering Education and Research, Nashik",
+        dept: "Department of MCA",
+        date: "Date: September 2026",
         title: "Kumbh Mela – Experience and Suggestions Form",
-        greeting: "Dear Sir/Madam,",
-        body: "We are collecting information from people who have previously visited or experienced the Kumbh Mela to understand their experiences, challenges, and expectations.\n\nIf you have previously attended the Kumbh Mela, kindly fill out this form and share your experience.",
+        greeting: "Dear Sir/Madam, Greeting…!!!!",
+        body: "If you have previously experienced the Kumbh Mela, kindly fill out this form.\n\nYour response will directly help improve planning and facilities for future Kumbh Mela events, so that pilgrims attending the upcoming Nashik Kumbh Mela receive better services.",
         bullets: [
-          "Your responses will help us understand the experiences of pilgrims and visitors.",
-          "The collected information will support the study and planning of better facilities and services for the upcoming Nashik Kumbh Mela.",
-          "If you know anyone who has previously attended the Kumbh Mela, kindly share this QR code/form link with your friends, relatives, neighbours, and other contacts.",
+          "Your response will help improve planning and facilities for future Kumbh Mela events.",
+          "The pilgrims attending the upcoming Nashik Kumbh Mela can receive better services.",
+          "If you know someone who has attended, kindly share the QR code/link with friends, relatives, and neighbors.",
           "Please provide accurate information based on your own experience.",
-          "Your participation is valuable and will contribute to better understanding and planning for future Kumbh Mela events.",
         ],
-        closing: "Thank you for your valuable participation and support.",
+        sections: [
+          "A. Visitor Background and Visit Details",
+          "B. Facilities and Visitor Experience",
+          "C. Crowd Management and Technology",
+          "D. Information, Communication and Basic Infrastructure",
+          "E. Impact and Future Improvements",
+        ],
         cta: "Start Survey",
         changeLang: "Change language",
       },
       hi: {
+        institution: "के के वाघ इंस्टीट्यूट ऑफ इंजीनियरिंग एजुकेशन एंड रिसर्च, नासिक",
+        dept: "एमसीए विभाग",
+        date: "दिनांक: सितंबर 2026",
         title: "कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म",
-        greeting: "प्रिय महोदय / महोदया,",
-        body: "हम उन लोगों से जानकारी एकत्र कर रहे हैं जिन्होंने पूर्व में कुंभ मेले में भाग लिया है या कुंभ मेले का अनुभव लिया है, ताकि उनके अनुभव, समस्याओं और अपेक्षाओं को समझा जा सके।\n\nयदि आपने पहले कुंभ मेले में भाग लिया है, तो कृपया इस फ़ॉर्म को भरकर अपना अनुभव साझा करें।",
+        greeting: "प्रिय महोदय / महोदया, सादर प्रणाम…!!!!",
+        body: "यदि आपने पूर्व में कुंभ मेले का अनुभव लिया है, तो कृपया इस फ़ॉर्म को भरें।\n\nआपकी प्रतिक्रिया भविष्य के कुंभ मेला आयोजनों के नियोजन और सुविधाओं में सुधार करने में सहायक होगी, जिससे आगामी नासिक कुंभ मेले में आने वाले तीर्थयात्रियों को बेहतर सेवाएं प्राप्त हो सकेंगी।",
         bullets: [
-          "आपकी प्रतिक्रिया से तीर्थयात्रियों एवं आगंतुकों के अनुभवों को समझने में सहायता मिलेगी।",
-          "एकत्रित जानकारी आगामी नासिक कुंभ मेले के लिए बेहतर सुविधाओं एवं सेवाओं के अध्ययन और योजना में सहायक होगी।",
-          "यदि आप ऐसे किसी व्यक्ति को जानते हैं जिसने पूर्व में कुंभ मेले में भाग लिया है, तो कृपया यह QR Code/Form Link अपने मित्रों, रिश्तेदारों, पड़ोसियों एवं अन्य परिचितों के साथ साझा करें।",
-          "कृपया अपने स्वयं के अनुभव के आधार पर सही एवं सटीक जानकारी प्रदान करें।",
-          "आपकी सहभागिता भविष्य के कुंभ मेले की बेहतर समझ एवं योजना बनाने में महत्वपूर्ण योगदान देगी।",
+          "आपकी प्रतिक्रिया भविष्य के कुंभ मेला आयोजनों की योजना और सुविधाओं को बेहतर बनाएगी।",
+          "आगामी नासिक कुंभ मेले में भाग लेने वाले श्रद्धालुओं को उत्कृष्ट सेवाएं मिल सकेंगी।",
+          "यदि आप किसी ऐसे व्यक्ति को जानते हैं जिन्होंने कुंभ मेले में भाग लिया है, तो कृपया यह लिंक/क्यूआर कोड साझा करें।",
+          "कृपया अपने स्वयं के अनुभव के आधार पर सटीक जानकारी प्रदान करें।",
         ],
-        closing: "आपकी मूल्यवान सहभागिता एवं सहयोग के लिए धन्यवाद।",
+        sections: [
+          "खंड अ: आगंतुक पृष्ठभूमि और यात्रा विवरण",
+          "खंड ब: सुविधाएं और आगंतुक अनुभव",
+          "खंड स: भीड़ प्रबंधन और प्रौद्योगिकी",
+          "खंड द: सूचना, संचार और बुनियादी ढांचा",
+          "खंड इ: प्रभाव और भविष्य में सुधार",
+        ],
         cta: "सर्वेक्षण शुरू करें",
         changeLang: "भाषा बदलें",
       },
       mr: {
+        institution: "के के वाघ इन्स्टिट्यूट ऑफ इंजिनिअरिंग एज्युकेशन अँड रिसर्च, नाशिक",
+        dept: "एमसीए विभाग",
+        date: "दिनांक: सप्टेंबर २०२६",
         title: "कुंभमेळा – अनुभव आणि सूचना फॉर्म",
-        greeting: "प्रिय महोदय / महोदया,",
-        body: "आम्ही अशा व्यक्तींकडून माहिती गोळा करत आहोत ज्यांनी यापूर्वी कुंभमेळ्यात सहभाग घेतला आहे किंवा कुंभमेळ्याचा अनुभव घेतला आहे, जेणेकरून त्यांचे अनुभव, अडचणी आणि अपेक्षा समजून घेता येतील.\n\nजर तुम्ही यापूर्वी कुंभमेळ्यात सहभागी झाला असाल, तर कृपया हा फॉर्म भरून आपला अनुभव नक्की शेअर करा.",
+        greeting: "प्रिय महोदय / महोदया, सस्नेह नमस्कार…!!!!",
+        body: "जर तुम्ही यापूर्वी कुंभमेळ्याचा अनुभव घेतला असेल, तर कृपया हा फॉर्म भरावा.\n\nतुमच्या बहुमूल्य प्रतिसादामुळे भविष्यातील कुंभमेळा आयोजनांचे नियोजन आणि सुविधा सुधारण्यास मदत होईल, जेणेकरून आगामी नाशिक कुंभमेळ्यात येणाऱ्या भाविकांना अधिक दर्जेदार सेवा व सुविधा मिळू शकतील.",
         bullets: [
-          "तुमच्या प्रतिसादांमुळे भाविक आणि पर्यटकांचे अनुभव समजून घेण्यास मदत होईल.",
-          "गोळा केलेली माहिती आगामी नासिक कुंभमेळ्यासाठी उत्तम सुविधा आणि सेवांचे नियोजन व अभ्यास करण्यासाठी उपयुक्त ठरेल.",
-          "जर तुम्ही अशा कोणाला ओळखत असाल ज्यांनी यापूर्वी कुंभमेळ्यात सहभाग घेतला आहे, तर कृपया हा QR Code / फॉर्म लिंक तुमच्या मित्रांसोबत, नातेवाईकांसोबत आणि परिचितांसोबत नक्की शेअर करा.",
-          "कृपया आपल्या स्वतःच्या अनुभवाच्या आधारे खरी आणि अचूक माहिती द्या.",
-          "तुमचा सहभाग भविष्यातील कुंभमेळ्याच्या उत्तम नियोजनात अत्यंत मोलाचे योगदान देईल.",
+          "तुमचा प्रतिसाद भविष्यातील कुंभमेळा आयोजनांचे नियोजन व सुविधा सुधारण्यास मदत करेल.",
+          "आगामी नाशिक कुंभमेळ्यात सहभागी होणाऱ्या भाविकांना अधिक चांगल्या सुविधा मिळू शकतील.",
+          "जर तुम्ही अशा कोणाला ओळखत असाल ज्यांनी कुंभमेळ्यास भेट दिली आहे, तर कृपया ही लिंक/क्यूआर कोड नक्की शेअर करा.",
+          "कृपया आपल्या स्वतःच्या अनुभवावर आधारित खरी आणि अचूक माहिती द्यावी.",
         ],
-        closing: "तुमच्या मौल्यवान सहभागाबद्दल आणि सहकार्याबद्दल मनापासून धन्यवाद.",
+        sections: [
+          "विभाग अ: अभ्यागतांची पार्श्वभूमी आणि भेटीचा तपशील",
+          "विभाग ब: सुविधा आणि अभ्यागतांचा अनुभव",
+          "विभाग क: गर्दी व्यवस्थापन आणि तंत्रज्ञान",
+          "विभाग ड: माहिती, संप्रेषण आणि मूलभूत पायाभूत सुविधा",
+          "विभाग इ: प्रभाव आणि भविष्यातील सुधारणा",
+        ],
         cta: "सर्वेक्षण सुरू करा",
         changeLang: "भाषा बदला",
       },
     } as const;
+
     const intro = introContent[lang];
-    return (    
+
+    return (
       <Shell>
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-5 pb-4 pt-6">
-          {/* Info card */}
-          <div className="rounded-2xl border border-border/60 bg-card/85 px-6 py-7 sm:px-8 sm:py-8 shadow-sm">
-            {/* Title */}
-            <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-6 text-center">{intro.title}</h2>
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col gap-4 pb-4 pt-2">
+          <div className="rounded-2xl border border-border/70 bg-card/90 px-5 py-6 sm:px-8 sm:py-8 shadow-sm">
+            {/* Institution Badge */}
+            <div className="text-center border-b border-border/60 pb-4 mb-4">
+              <p className="text-xs sm:text-sm font-semibold tracking-wide text-primary uppercase">
+                {intro.institution}
+              </p>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium mt-0.5">
+                {intro.dept} · {intro.date}
+              </p>
+              <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-2">
+                {intro.title}
+              </h2>
+            </div>
 
-            {/* Greeting */}
-            <p className="text-base sm:text-xl font-bold text-foreground mb-4">{intro.greeting}</p>
-
-            {/* Body paragraphs */}
-            <div className="space-y-4 mb-6">
+            {/* Greeting & Body */}
+            <p className="text-base sm:text-lg font-bold text-foreground mb-2.5">{intro.greeting}</p>
+            <div className="space-y-2.5 mb-4">
               {intro.body.split("\n\n").map((para, i) => (
-                <p key={i} className="text-base sm:text-lg text-muted-foreground leading-relaxed">{para}</p>
+                <p key={i} className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                  {para}
+                </p>
               ))}
             </div>
 
-            {/* Bullet points */}
-            <ul className="space-y-3.5 mb-6">
+            {/* Bullets */}
+            <ul className="space-y-2 mb-5">
               {intro.bullets.map((b, i) => (
-                <li key={i} className="flex items-start gap-3 text-base sm:text-lg text-foreground leading-relaxed">
-                  <span className="shrink-0 text-primary font-bold text-lg leading-none mt-1">→</span>
+                <li key={i} className="flex items-start gap-2.5 text-xs sm:text-sm text-foreground">
+                  <span className="shrink-0 text-primary font-bold mt-0.5">➤</span>
                   <span>{b}</span>
                 </li>
               ))}
             </ul>
 
-            {/* Divider */}
-            <div className="border-t border-border/60 pt-5">
-              <p className="text-base sm:text-lg font-semibold text-foreground">{intro.closing}</p>
+            {/* Structure Overview */}
+            <div className="rounded-xl bg-muted/40 border border-border/60 p-3.5 sm:p-4">
+              <p className="text-xs sm:text-sm font-semibold text-foreground uppercase tracking-wider mb-2">
+                {t.sectionOverview}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs sm:text-sm text-muted-foreground">
+                {intro.sections.map((s, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                    <span className="font-medium text-foreground">{s}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* CTA */}
           <button
             type="button"
             onClick={() => setShowIntro(false)}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl text-lg sm:text-xl font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.97]"
+            className="w-full min-h-[52px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-base sm:text-lg font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.98]"
           >
             <span>{intro.cta}</span>
-            <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+            <ChevronRight className="h-5 w-5" />
           </button>
 
           <button
             type="button"
-            onClick={() => { setLang(null); setShowIntro(false); }}
+            onClick={() => {
+              setLang(null);
+              setShowIntro(false);
+            }}
             className="text-sm text-muted-foreground underline-offset-2 hover:underline text-center pb-2"
           >
             ← {intro.changeLang}
@@ -806,794 +824,765 @@ function SurveyPage() {
     }
   };
 
+  // ─── Survey Chat Flow ────────────────────────────────────────────────────────
   return (
     <Shell>
-      {/* Ultra-minimal Fixed Edge Progress Bar (Typeform/Linear Style) */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-foreground/5 pointer-events-none">
+      {/* Top Progress Bar */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 h-[3px] bg-foreground/5 pointer-events-none"
+        role="progressbar"
+        aria-valuenow={Math.round(progress)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Survey completion progress"
+      >
         <div
           className="h-full bg-primary transition-all duration-500 ease-out"
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      {/* Chat-like Conversation Flow */}
-      <div className="space-y-4 sm:space-y-5 pt-2 sm:pt-4">
-        {QUESTIONS.slice(0, step + 1).map((q, idx) => {
+      <div className="space-y-4 pt-1 sm:pt-3">
+        {/* Previous Questions Bubbles */}
+        {QUESTIONS.slice(0, step).map((q, idx) => {
           const ans = answers[q.id];
-          const isActive = idx === step;
+          const qSection = SECTIONS[q.section];
 
-          // Previous questions show as completed chat messages
-          if (!isActive) {
-            return (
-              <div key={q.id} className="space-y-3 animate-in fade-in duration-300">
-                {/* Question Bubble - Left Aligned */}
-                <div className="flex justify-start">
-                  <div className="max-w-[85%] sm:max-w-[75%]">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-2xl rounded-br-2xl bg-muted/60 border border-border/40">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Q{idx + 1}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setStep(idx)}
-                        className="text-[10px] font-medium text-primary hover:underline"
-                        aria-label={`Edit question ${idx + 1}`}
-                      >
-                        Edit
-                      </button>
-                    </div>
-                    <div className="mt-1 px-4 py-3 rounded-2xl rounded-tl-sm bg-amber-200/70 border border-border shadow-sm">
-                      <p className="text-[15px] sm:text-base leading-relaxed text-foreground">
-                        {q.label[lang]}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Answer Bubble - Right Aligned */}
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] sm:max-w-[75%]">
-                    <div className="px-4 py-3 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-sm">
-                      {ans?.text ? (
-                        <p className="text-[15px] sm:text-base leading-relaxed whitespace-pre-line break-words">
-                          {ans.text}
-                        </p>
-                      ) : null}
-                      {ans?.audioUrl && (
-                        <div className="mt-2 flex items-center gap-2">
-                          <span className="text-xs">🎙️</span>
-                          <audio src={ans.audioUrl} controls className="h-8 max-w-[180px]" />
-                        </div>
-                      )}
-                      {ans?.files && ans.files.length > 0 ? (
-                        <div className="mt-2 space-y-1">
-                          {ans.files.map((f, fIdx) => (
-                            <div key={fIdx} className="flex items-center gap-2 text-xs">
-                              <span>📎</span>
-                              <span className="truncate">{f.fileName || t.fileAttached}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : ans?.fileUrl ? (
-                        <div className="mt-2 flex items-center gap-2 text-xs">
-                          <span>📎</span>
-                          <span className="truncate">{ans.fileName || t.fileAttached}</span>
-                        </div>
-                      ) : null}
-                      {!ans?.text && !ans?.audioUrl && !ans?.fileUrl && (!ans?.files || ans.files.length === 0) && (
-                        <p className="text-sm italic opacity-70">—</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          // Active Question - Large, centered, easy to focus
           return (
-            <div
-              key={q.id}
-              ref={activeQuestionRef}
-              className="animate-in fade-in slide-in-from-bottom-4 duration-500"
-            >
-              {/* Question Bubble */}
-              <div className="mb-5">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-2xl rounded-br-2xl bg-muted/60 border border-border/40">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {t.question} {step + 1} {t.of} {total}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground/40 font-normal">·</span>
-                  <span className="text-[10px] font-semibold text-primary tabular-nums">
-                    {Math.round(progress)}%
-                  </span>
-                  {!isRequired && (
-                    <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted/50">
-                      {t.optional}
+            <div key={q.id} className="space-y-2 animate-in fade-in duration-300">
+              <div className="flex justify-start">
+                <div className="max-w-[90%] sm:max-w-[75%]">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-xl rounded-br-xl bg-muted/60 border border-border/40">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {qSection.letter} · Q{idx + 1}
                     </span>
-                  )}
-                </div>
-                <div className="mt-1 px-5 py-4 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-amber-200/70 border-2 border-primary/20 shadow-lg">
-                  <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-medium">
-                    {q.label[lang]}
-                    {isRequired && (
-                      <span className="text-foreground ml-1 font-normal" title={t.required}>*</span>
-                    )}
-                  </h1>
+                    <button
+                      type="button"
+                      onClick={() => setStep(idx)}
+                      className="text-[10px] font-medium text-primary hover:underline"
+                      aria-label={`Edit question ${idx + 1}`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <div className="mt-1 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl rounded-tl-sm bg-amber-200/70 dark:bg-amber-950/40 border border-border shadow-xs">
+                    <p className="text-[13px] sm:text-sm leading-relaxed text-foreground">
+                      {q.label[lang]}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Answer Input Area */}
-              <div className="px-1">
-                {q.type === "text" && !hasAudioAnswer && (
-                  <div className="space-y-2">
-                    <label className="sr-only">{t.yourAnswer}</label>
-                    {q.id === "phone" ? (
-                      <div className="flex items-stretch rounded-xl border-2 border-border bg-card transition-all focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 overflow-hidden">
-                        <span className="flex items-center px-3.5 text-base sm:text-lg font-medium text-muted-foreground border-r border-border bg-muted/40 select-none">
-                          +91
-                        </span>
-                        <input
-                          id="phone"
-                          name="phone"
-                          type="tel"
-                          inputMode="tel"
-                          autoComplete="tel"
-                          value={current.text}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/[^\d\s\-()]/g, "");
-                            // Extract only digits and limit to 10
-                            const digits = val.replace(/[^\d]/g, "");
-                            if (digits.length > 10) {
-                              val = val.slice(0, -1);
-                            }
-                            update({ text: val });
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); goNext(); }
-                          }}
-                          placeholder={t.phonePlaceholder || "98765 43210"}
-                          className="flex-1 px-4 py-3.5 text-base sm:text-lg bg-transparent outline-none placeholder:text-muted-foreground/50"
-                        />
+              <div className="flex justify-end">
+                <div className="max-w-[90%] sm:max-w-[75%]">
+                  <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-2xl rounded-br-sm bg-primary/90 text-primary-foreground shadow-xs">
+                    {ans?.text ? (
+                      <p className="text-[13px] sm:text-sm leading-relaxed whitespace-pre-line break-words">
+                        {ans.text}
+                      </p>
+                    ) : null}
+                    {ans?.audioUrl && (
+                      <div className="mt-1.5 flex items-center gap-2">
+                        <span className="text-xs">🎙️</span>
+                        <audio src={ans.audioUrl} controls className="h-7 max-w-[170px]" />
                       </div>
-                    ) : q.id === "email" ? (
-                      <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        inputMode="email"
-                        autoComplete="email"
-                        value={current.text}
-                        onChange={(e) => update({ text: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); goNext(); }
-                        }}
-                        placeholder={t.emailPlaceholder || "e.g. name@example.com (Optional)"}
-                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                      />
-                    ) : q.id === "state" ? (
-                      <StateSelector
-                        value={current.text ?? ""}
-                        onChange={(val) => update({ text: val })}
-                        onLocationDetected={handleLocationDetected}
-                        lang={lang}
-                        t={t}
-                        onEnter={goNext}
-                      />
-                    ) : q.id === "city" ? (
-                      <CityInput
-                        value={current.text ?? ""}
-                        onChange={(val) => update({ text: val })}
-                        onLocationDetected={handleLocationDetected}
-                        lang={lang}
-                        t={t}
-                        onEnter={goNext}
-                      />
-                    ) : (
-                      <input
-                        id={q.id === "name" ? "name" : undefined}
-                        name={q.id === "name" ? "name" : undefined}
-                        type="text"
-                        inputMode="text"
-                        autoComplete={q.id === "name" ? "name" : undefined}
-                        value={current.text}
-                        onChange={(e) => update({ text: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); goNext(); }
-                        }}
-                        placeholder={t.yourAnswer}
-                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                      />
                     )}
-                  </div>
-                )}
-
-                {q.type === "longtext" && !hasAudioAnswer && (
-                  <div className="space-y-2">
-                    <label className="sr-only">{t.yourAnswer}</label>
-                    <textarea
-                      value={current.text}
-                      onChange={(e) => update({ text: e.target.value })}
-                      placeholder={t.yourAnswer}
-                      rows={5}
-                      className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
-                    />
-                  </div>
-                )}
-
-                {q.type === "number_unit" && (
-                  <div className="flex gap-3">
-                    <div className="flex-1 relative">
-                      <input
-                        type="number"
-                        min="0"
-                        value={current.details ?? ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const unit = current.choice || q.options![lang][0];
-                          update({ details: val, choice: unit, text: val ? `${val} ${unit}` : "" });
-                        }}
-                        placeholder="e.g. 2"
-                        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                      />
-                    </div>
-                    <div className="flex-1 relative">
-                      <select
-                        value={current.choice || q.options![lang][0]}
-                        onChange={(e) => {
-                          const unit = e.target.value;
-                          const val = current.details ?? "";
-                          update({ choice: unit, details: val, text: val ? `${val} ${unit}` : "" });
-                        }}
-                        className="w-full px-4 py-3.5 pr-10 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 appearance-none"
-                      >
-                        {q.options![lang].map((opt) => (
-                          <option key={opt} value={opt}>{opt}</option>
+                    {ans?.files && ans.files.length > 0 ? (
+                      <div className="mt-1.5 space-y-1">
+                        {ans.files.map((f, fIdx) => (
+                          <div key={fIdx} className="flex items-center gap-2 text-xs">
+                            <span>📎</span>
+                            <span className="truncate">{f.fileName || t.fileAttached}</span>
+                          </div>
                         ))}
-                      </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-                    </div>
-                  </div>
-                )}
-
-                {q.type === "rating" && (
-                  <div className="flex flex-wrap gap-3 justify-center">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => update({ text: String(n) })}
-                        className={`h-16 w-16 sm:h-20 sm:w-20 rounded-2xl text-xl sm:text-2xl font-semibold transition-all ${
-                          current.text === String(n)
-                            ? "bg-primary text-primary-foreground shadow-lg scale-110 border-2 border-primary"
-                            : "bg-card border-2 border-border hover:border-primary/40 hover:scale-105 hover:shadow-md active:scale-95"
-                        }`}
-                        aria-label={`Rating ${n} out of 5`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Single Choice (Radio) - Big Touch Targets */}
-                {q.type === "choice" && (
-                  <div className="space-y-3">
-                    {q.options![lang].map((opt, optIdx) => {
-                      const isYesOption = optIdx === 0;
-                      const isSelected =
-                        current.choice === opt ||
-                        current.text === opt ||
-                        Boolean(isYesOption && current.text?.startsWith(opt + " - "));
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => {
-                            if (q.id === "medical_needed" || q.id === "local_help") {
-                              if (isYesOption) {
-                                const details = current.details ?? "";
-                                update({
-                                  choice: opt,
-                                  details,
-                                  text: details.trim() ? `${opt} - ${details.trim()}` : opt,
-                                });
-                              } else {
-                                update({
-                                  choice: opt,
-                                  details: "",
-                                  text: opt,
-                                });
-                              }
-                            } else {
-                              update({ text: opt });
-                            }
-                          }}
-                          className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
-                            isSelected
-                              ? "border-primary bg-primary/10 shadow-md"
-                              : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
-                          }`}
-                        >
-                          <span
-                            className={`flex-shrink-0 h-6 w-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {isSelected && (
-                              <span className="h-3 w-3 rounded-full bg-primary-foreground" />
-                            )}
-                          </span>
-                          <span className={isSelected ? "font-medium" : ""}>{opt}</span>
-                        </button>
-                      );
-                    })}
-
-                    {/* conditional input field if Yes is selected */}
-                    {(q.id === "medical_needed" || q.id === "local_help") &&
-                      (current.choice === q.options![lang][0] ||
-                        current.text === q.options![lang][0] ||
-                        Boolean(current.text?.startsWith(q.options![lang][0] + " - "))) && (
-                        <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border">
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            {q.id === "medical_needed" ? t.specifyMedical : t.specifyReason}
-                          </label>
-                          <input
-                            value={
-                              current.details ??
-                              (current.text && current.text.includes(" - ")
-                                ? current.text.split(" - ").slice(1).join(" - ")
-                                : "")
-                            }
-                            onChange={(e) => {
-                              const details = e.target.value;
-                              const choice = q.options?.[lang]?.[0] ?? "Yes";
-                              const formatted: string = details.trim()
-                                ? `${choice} - ${details.trim()}`
-                                : choice;
-                              update({
-                                choice,
-                                details,
-                                text: formatted,
-                              });
-                            }}
-                            placeholder={q.id === "medical_needed" ? t.specifyMedical : t.specifyReason}
-                            className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
-                          />
-                        </div>
-                      )}
-                  </div>
-                )}
-
-                {/* Multi-select Checkboxes - Big Touch Targets */}
-                {q.type === "checkbox" && (
-                  <div className="space-y-3">
-                    {q.options![lang].map((opt, optIdx) => {
-                      const isOther = (q.id === "reason" || q.id === "challenges") && optIdx === q.options![lang].length - 1;
-                      const isPreviousKumbhNone =
-                        q.id === "previous_kumbh" && optIdx === q.options![lang].length - 1;
-                      const selectedList = current.text
-                        ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
-                        : [];
-                      const isChecked = isOther
-                        ? selectedList.some(
-                            (s) =>
-                              s === opt ||
-                              s.startsWith(opt + " - ") ||
-                              s.startsWith(opt + ": ") ||
-                              s === "Other" ||
-                              s.startsWith("Other - ") ||
-                              s === "अन्य" ||
-                              s.startsWith("अन्य - ") ||
-                              s === "इतर" ||
-                              s.startsWith("इतर - ")
-                          )
-                        : selectedList.includes(opt);
-                        const hasPreviousKumbhSelection =
-                          q.id === "previous_kumbh" &&
-                          selectedList.some((selection) => selection !== q.options![lang][q.options![lang].length - 1]);
-                        const isDisabled = isPreviousKumbhNone && hasPreviousKumbhSelection;
-
-                      return (
-                        <button
-                          key={opt}
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={() => {
-                            if (isDisabled) return;
-
-                            let nextList: string[];
-                            if (isOther) {
-                              if (isChecked) {
-                                nextList = selectedList.filter(
-                                  (s) =>
-                                    s !== opt &&
-                                    !s.startsWith(opt + " - ") &&
-                                    !s.startsWith(opt + ": ") &&
-                                    s !== "Other" &&
-                                    !s.startsWith("Other - ") &&
-                                    s !== "अन्य" &&
-                                    !s.startsWith("अन्य - ") &&
-                                    s !== "इतर" &&
-                                    !s.startsWith("इतर - ")
-                                );
-                                update({ text: nextList.join(", "), details: "" });
-                              } else {
-                                const details = current.details?.trim();
-                                const otherVal = details ? `${opt} - ${details}` : opt;
-                                nextList = [...selectedList, otherVal];
-                                update({ text: nextList.join(", ") });
-                              }
-                            } else {
-                              nextList = isChecked
-                                ? selectedList.filter((s) => s !== opt)
-                                : [
-                                    ...selectedList.filter(
-                                      (selection) =>
-                                        !(
-                                          q.id === "previous_kumbh" &&
-                                          selection === q.options![lang][q.options![lang].length - 1]
-                                        )
-                                    ),
-                                    opt,
-                                  ];
-                              update({ text: nextList.join(", ") });
-                            }
-                          }}
-                          className={`w-full flex items-center gap-4 px-5 py-4 text-left text-base sm:text-lg rounded-xl border-2 transition-all ${
-                            isDisabled
-                              ? "cursor-not-allowed border-border bg-muted/50 opacity-50"
-                              : isChecked
-                              ? "border-primary bg-primary/10 shadow-md"
-                              : "border-border bg-card hover:border-primary/40 hover:shadow-sm active:scale-[0.98]"
-                          }`}
-                        >
-                          <span
-                            className={`flex-shrink-0 h-6 w-6 rounded border-2 flex items-center justify-center transition-all ${
-                              isChecked
-                                ? "border-primary bg-primary"
-                                : "border-muted-foreground/40"
-                            }`}
-                          >
-                            {isChecked && (
-                              <Check className="h-4 w-4 stroke-[3] text-primary-foreground" />
-                            )}
-                          </span>
-                          <span className={isChecked ? "font-medium" : ""}>{opt}</span>
-                        </button>
-                      );
-                    })}
-
-                    {/* Primary Reason conditional input field if Other is selected */}
-                    {(q.id === "reason" || q.id === "challenges") && (() => {
-                      const otherOpt = q.options![lang][q.options![lang].length - 1]!;
-                      const selectedList = current.text
-                        ? current.text.split(", ").map((s) => s.trim()).filter(Boolean)
-                        : [];
-                      const isOtherChecked = selectedList.some(
-                        (s) =>
-                          s === otherOpt ||
-                          s.startsWith(otherOpt + " - ") ||
-                          s.startsWith(otherOpt + ": ") ||
-                          s === "Other" ||
-                          s.startsWith("Other - ") ||
-                          s === "अन्य" ||
-                          s.startsWith("अन्य - ") ||
-                          s === "इतर" ||
-                          s.startsWith("इतर - ")
-                      );
-
-                      if (!isOtherChecked) return null;
-
-                      const otherEntry = selectedList.find(
-                        (s) =>
-                          s.startsWith(otherOpt + " - ") ||
-                          s.startsWith(otherOpt + ": ") ||
-                          s.startsWith("Other - ") ||
-                          s.startsWith("अन्य - ") ||
-                          s.startsWith("इतर - ")
-                      );
-                      const existingDetails =
-                        current.details ??
-                        (otherEntry ? otherEntry.split(/ - |: /).slice(1).join(" - ") : "");
-
-                      return (
-                        <div className="mt-4 p-4 rounded-xl bg-muted/30 border border-border">
-                          <label className="block text-sm font-medium text-foreground mb-2">
-                            {t.specifyReason || "Please specify your reason..."}
-                          </label>
-                          <input
-                            value={existingDetails}
-                            onChange={(e) => {
-                              const details = e.target.value;
-                              const updatedList = selectedList.map((item) => {
-                                if (
-                                  item === otherOpt ||
-                                  item.startsWith(otherOpt + " - ") ||
-                                  item.startsWith(otherOpt + ": ") ||
-                                  item === "Other" ||
-                                  item.startsWith("Other - ") ||
-                                  item === "अन्य" ||
-                                  item.startsWith("अन्य - ") ||
-                                  item === "इतर" ||
-                                  item.startsWith("इतर - ")
-                                ) {
-                                  return details.trim() ? `${otherOpt} - ${details.trim()}` : otherOpt;
-                                }
-                                return item;
-                              });
-                              update({
-                                details,
-                                text: updatedList.join(", "),
-                              });
-                            }}
-                            placeholder={t.specifyReason || "Please specify your reason..."}
-                            className="w-full px-4 py-3 text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-                          />
-                        </div>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Final Question: Feedback Text + Multi-File Upload */}
-                {q.type === "file_text" && (
-                  <div className="space-y-4">
-                    {!hasAudioAnswer && (
-                      <div className="space-y-2">
-                        <label className="sr-only">{t.yourAnswer}</label>
-                        <textarea
-                          value={current.text}
-                          onChange={(e) => update({ text: e.target.value })}
-                          placeholder={t.yourAnswer}
-                          rows={5}
-                          className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
-                        />
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Voice Input */}
-                {q.id !== "state" && q.id !== "phone" && (
-                  <VoiceInput
-                    lang={lang}
-                    questionType={q.type}
-                    disableAudioRecording={
-                      q.id === "name" ||
-                      q.id === "phone" ||
-                      q.id === "email" ||
-                      q.id === "state" ||
-                      q.id === "city"
-                    }
-                    existingText={current.text}
-                    onTranscript={(text) =>
-                      update({ text: current.text ? `${current.text} ${text}` : text })
-                    }
-                    audioUrl={current.audioUrl}
-                    onRecordingChange={setIsRecordingAudio}
-                    onAudio={(blob, previewUrl) => {
-                      if (blob && previewUrl) {
-                        audioBlobsRef.current[q.id] = blob;
-                        update({ text: "", audioUrl: previewUrl });
-                      } else {
-                        delete audioBlobsRef.current[q.id];
-                        update({ audioUrl: undefined });
-                      }
-                    }}
-                    onRecordStart={() => {
-                      if (current.audioUrl && current.audioUrl.startsWith("blob:")) {
-                        URL.revokeObjectURL(current.audioUrl);
-                      }
-                      delete audioBlobsRef.current[q.id];
-                      update({ text: "", audioUrl: undefined });
-                    }}
-                  />
-                )}
-
-                {/* Final Question: Multi-File Upload */}
-                {q.type === "file_text" && (
-                  <div className="mt-4">
-                    <div>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                        onChange={handleFileChange}
-                        disabled={isCompressing}
-                        className="hidden"
-                        id="survey-file-upload"
-                      />
-                      {(!current.files || current.files.length === 0) && !current.fileUrl ? (
-                        <label
-                          htmlFor="survey-file-upload"
-                          className={`flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border bg-card shadow-sm p-6 text-center transition-all ${
-                            isCompressing
-                              ? "cursor-wait opacity-70"
-                              : "cursor-pointer hover:border-primary/60 hover:shadow-md active:scale-[0.98]"
-                          }`}
-                        >
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            {isCompressing ? (
-                              <Loader2 className="h-6 w-6 animate-spin" />
-                            ) : (
-                              <Upload className="h-6 w-6" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm sm:text-base font-medium text-foreground">
-                              {isCompressing ? "Compressing files..." : t.uploadFile}
-                            </p>
-                            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">{t.uploadHint}</p>
-                          </div>
-                        </label>
-                      ) : (
-                        <div className="space-y-3">
-                          {/* Attached files list */}
-                          <div className="space-y-2">
-                            {(current.files && current.files.length > 0
-                              ? current.files
-                              : [
-                                  {
-                                    fileUrl: current.fileUrl!,
-                                    fileName: current.fileName,
-                                    fileType: current.fileType,
-                                    fileSize: undefined,
-                                  },
-                                ]
-                            ).map((fileItem, fIdx) => (
-                              <div
-                                key={fIdx}
-                                className="flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-card p-3 shadow-sm"
-                              >
-                                <div className="flex items-center gap-3 min-w-0">
-                                  {fileItem.fileType?.startsWith("image/") ? (
-                                    <img
-                                      src={fileItem.fileUrl}
-                                      alt="Preview"
-                                      className="h-14 w-14 rounded-lg object-cover border border-border shrink-0"
-                                    />
-                                  ) : fileItem.fileType?.startsWith("video/") ? (
-                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                                      <Film className="h-7 w-7" />
-                                    </div>
-                                  ) : (
-                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                                      <Paperclip className="h-7 w-7" />
-                                    </div>
-                                  )}
-                                  <div className="min-w-0">
-                                    <p className="text-sm font-medium text-foreground truncate">
-                                      {fileItem.fileName || t.fileAttached}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground truncate">
-                                      {fileItem.fileSize
-                                        ? `${(fileItem.fileSize / (1024 * 1024)).toFixed(2)} MB`
-                                        : fileItem.fileType || t.fileAttached}
-                                    </p>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveSpecificFile(fIdx)}
-                                  className="rounded-lg p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
-                                  title={t.removeFile}
-                                  aria-label={t.removeFile}
-                                >
-                                  <X className="h-5 w-5" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Add more files button & size summary */}
-                          <div className="flex items-center justify-between pt-1">
-                            <label
-                              htmlFor={!isCompressing ? "survey-file-upload" : undefined}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg border border-border bg-card transition-all ${
-                                isCompressing
-                                  ? "opacity-50 cursor-wait"
-                                  : "hover:bg-accent hover:border-primary/40 cursor-pointer"
-                              }`}
-                            >
-                              {isCompressing ? (
-                                <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
-                              ) : (
-                                <Upload className="h-3.5 w-3.5 text-primary" />
-                              )}
-                              <span>
-                                {isCompressing ? "Compressing..." : t.uploadMoreFiles || "Add more files"}
-                              </span>
-                            </label>
-                            <span className="text-xs text-muted-foreground">
-                              {current.files?.length || 1} {t.filesAttached || "files attached"} (max 10MB total)
-                            </span>
-                          </div>
-                        </div>
+                    ) : null}
+                    {!ans?.text &&
+                      !ans?.audioUrl &&
+                      (!ans?.files || ans.files.length === 0) && (
+                        <p className="text-xs italic opacity-70">—</p>
                       )}
-                    </div>
                   </div>
-                )}
-
-                {/* Error Message */}
-                {error && (
-                  <div className="mt-4 px-4 py-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <p className="text-sm font-medium text-destructive">{error}</p>
-                  </div>
-                )}
-
-                {/* Navigation Buttons - Inline within the chat interface */}
-                <div className="mt-6 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleBack}
-                    className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-5 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-medium text-foreground bg-card border-2 border-border transition-all hover:bg-accent hover:border-primary/40 active:scale-[0.97]"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                    <span>{t.back}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    disabled={submitting || isCompressing}
-                    className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 px-6 py-3.5 sm:py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
-                  >
-                    {(submitting || isCompressing) && <Loader2 className="h-5 w-5 animate-spin" />}
-                    <span>
-                      {submitting && uploadProgress && uploadProgress.total > 0
-                        ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...`
-                        : step === total - 1
-                        ? t.submit
-                        : t.next}
-                    </span>
-                    {!(submitting || isCompressing) && step < total - 1 && <ChevronRight className="h-5 w-5" />}
-                  </button>
                 </div>
               </div>
             </div>
           );
         })}
+
+        {/* Active Question Area */}
+        <div
+          ref={activeQuestionRef}
+          className="animate-in fade-in slide-in-from-bottom-3 duration-400 pt-1"
+        >
+          {/* Question Bubble & Section Badge */}
+          <div className="mb-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-t-xl rounded-br-xl bg-muted/80 border border-border/50 text-[11px] font-semibold">
+              <span className="uppercase tracking-wider text-primary">
+                {currentSection.letter} · {currentSection.title[lang]}
+              </span>
+              <span className="text-muted-foreground/40">|</span>
+              <span className="text-foreground">
+                {t.question} {step + 1} {t.of} {total}
+              </span>
+              {!isRequired && (
+                <span className="text-[10px] font-medium text-muted-foreground px-2 py-0.5 rounded-full bg-muted">
+                  {t.optional}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-1 px-4 py-3.5 sm:px-6 sm:py-5 rounded-2xl rounded-tl-sm bg-amber-200/70 dark:bg-amber-950/40 border-2 border-primary/25 shadow-sm">
+              <h1 className="text-base sm:text-lg leading-relaxed text-foreground font-semibold">
+                {question.label[lang]}
+                {isRequired && (
+                  <span className="text-destructive ml-1.5 font-bold" title={t.required}>
+                    *
+                  </span>
+                )}
+              </h1>
+              {question.hint && (
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 leading-relaxed">
+                  {question.hint[lang]}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Answer Input Area */}
+          <div className="px-0.5">
+            {/* Short text inputs */}
+            {question.type === "text" && !hasAudioAnswer && (
+              <div className="space-y-2">
+                {question.id === "phone" ? (
+                  <div className="flex items-stretch rounded-xl border-2 border-border bg-card transition-all focus-within:border-primary focus-within:ring-4 focus-within:ring-primary/10 overflow-hidden min-h-[52px]">
+                    <span className="flex items-center px-3.5 text-base sm:text-lg font-medium text-muted-foreground border-r border-border bg-muted/40 select-none">
+                      +91
+                    </span>
+                    <input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel-national"
+                      aria-label="10-digit mobile number"
+                      aria-required={isRequired}
+                      value={current.text}
+                      onChange={(e) => {
+                        let digits = e.target.value.replace(/[^\d]/g, "");
+                        // Auto-strip leading +91 or 0 if pasted
+                        if (digits.length > 10 && digits.startsWith("91")) {
+                          digits = digits.slice(2);
+                        } else if (digits.length > 10 && digits.startsWith("0")) {
+                          digits = digits.slice(1);
+                        }
+                        if (digits.length > 10) digits = digits.slice(0, 10);
+                        update({ text: digits });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          goNext();
+                        }
+                      }}
+                      placeholder={t.phonePlaceholder}
+                      className="flex-1 px-4 py-3 text-base sm:text-lg bg-transparent outline-none placeholder:text-muted-foreground/50"
+                    />
+                  </div>
+                ) : question.id === "city" ? (
+                  <CityInput
+                    value={current.text ?? ""}
+                    onChange={(val) => update({ text: val })}
+                    lang={lang}
+                    t={t}
+                    onEnter={goNext}
+                  />
+                ) : (
+                  <input
+                    id={question.id === "name" ? "name" : undefined}
+                    name={question.id === "name" ? "name" : undefined}
+                    type="text"
+                    autoComplete={question.id === "name" ? "name" : undefined}
+                    aria-label={question.label[lang]}
+                    aria-required={isRequired}
+                    value={current.text}
+                    onChange={(e) => update({ text: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        goNext();
+                      }
+                    }}
+                    placeholder={t.yourAnswer}
+                    className="w-full min-h-[52px] px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Long Answer textarea */}
+            {question.type === "longtext" && !hasAudioAnswer && (
+              <div className="space-y-2">
+                <textarea
+                  aria-label={question.label[lang]}
+                  value={current.text}
+                  onChange={(e) => update({ text: e.target.value })}
+                  placeholder={t.yourAnswer}
+                  rows={4}
+                  className="w-full px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 resize-none placeholder:text-muted-foreground/50"
+                />
+              </div>
+            )}
+
+            {/* Number with Unit (e.g., Q12: Hours, Days, Months) */}
+            {question.type === "number_unit" && (
+              <div className="flex gap-2.5 sm:gap-3">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    min="1"
+                    aria-label="Duration number"
+                    value={current.details ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const unit = current.choice || question.options![lang][0];
+                      update({
+                        details: val,
+                        choice: unit,
+                        text: val ? `${val} ${unit}` : "",
+                      });
+                    }}
+                    placeholder="e.g. 3"
+                    className="w-full min-h-[52px] px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+                  />
+                </div>
+                <div className="flex-1">
+                  <select
+                    aria-label="Duration unit"
+                    value={current.choice || question.options![lang][0]}
+                    onChange={(e) => {
+                      const unit = e.target.value;
+                      const val = current.details ?? "";
+                      update({
+                        choice: unit,
+                        details: val,
+                        text: val ? `${val} ${unit}` : "",
+                      });
+                    }}
+                    className="w-full min-h-[52px] px-3.5 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 cursor-pointer"
+                  >
+                    {question.options![lang].map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Single Choice (Radio) */}
+            {question.type === "choice" && (
+              <div
+                className="space-y-2.5"
+                role="radiogroup"
+                aria-label={question.label[lang]}
+              >
+                {question.options![lang].map((opt, optIdx) => {
+                  const isOtherOption =
+                    question.allowOther && optIdx === question.options![lang].length - 1;
+                  const isSelected =
+                    current.choice === opt ||
+                    current.text === opt ||
+                    Boolean(current.text?.startsWith(opt + " - "));
+
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => {
+                        if (isOtherOption) {
+                          const details = current.details ?? "";
+                          update({
+                            choice: opt,
+                            details,
+                            text: details.trim() ? `${opt} - ${details.trim()}` : opt,
+                          });
+                        } else {
+                          update({ choice: opt, text: opt, details: "" });
+                        }
+                      }}
+                      className={`w-full min-h-[52px] flex items-center gap-3.5 px-4 sm:px-5 py-3.5 text-left text-sm sm:text-base rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? "border-primary bg-primary/10 shadow-sm"
+                          : "border-border bg-card hover:border-primary/40 active:scale-[0.98]"
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 h-5 w-5 sm:h-6 sm:w-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground/40"
+                        }`}
+                      >
+                        {isSelected && (
+                          <span className="h-2.5 w-2.5 rounded-full bg-primary-foreground" />
+                        )}
+                      </span>
+                      <span className={isSelected ? "font-semibold" : ""}>{opt}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Other text input for Single Choice */}
+                {question.allowOther &&
+                  (current.choice === question.options![lang][question.options![lang].length - 1] ||
+                    Boolean(
+                      current.text?.startsWith(
+                        question.options![lang][question.options![lang].length - 1] + " - "
+                      )
+                    )) && (
+                    <div className="mt-2.5 p-3.5 rounded-xl bg-muted/40 border border-border animate-in fade-in">
+                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                        {t.specifyOther}
+                      </label>
+                      <input
+                        aria-label={t.specifyOther}
+                        value={current.details ?? ""}
+                        onChange={(e) => {
+                          const details = e.target.value;
+                          const otherOpt =
+                            question.options![lang][question.options![lang].length - 1]!;
+                          update({
+                            choice: otherOpt,
+                            details,
+                            text: details.trim() ? `${otherOpt} - ${details.trim()}` : otherOpt,
+                          });
+                        }}
+                        placeholder={t.specifyOther}
+                        className="w-full min-h-[46px] px-3.5 py-2.5 text-sm sm:text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
+                      />
+                    </div>
+                  )}
+              </div>
+            )}
+
+            {/* Multiple Choice Checkboxes */}
+            {question.type === "checkbox" && (
+              <div
+                className="space-y-2.5"
+                role="group"
+                aria-label={question.label[lang]}
+              >
+                {question.options![lang].map((opt, optIdx) => {
+                  const isOther =
+                    question.allowOther && optIdx === question.options![lang].length - 1;
+                  const isExclusive =
+                    question.exclusiveOptionIndex !== undefined &&
+                    optIdx === question.exclusiveOptionIndex;
+
+                  const selectedList = current.text
+                    ? current.text
+                        .split(", ")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                    : [];
+
+                  const isChecked = isOther
+                    ? selectedList.some(
+                        (s) =>
+                          s === opt ||
+                          s.startsWith(opt + " - ") ||
+                          s.startsWith(opt + ": ") ||
+                          s === "Other" ||
+                          s.startsWith("Other - ")
+                      )
+                    : selectedList.includes(opt);
+
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={isChecked}
+                      onClick={() => {
+                        let nextList: string[];
+
+                        if (isExclusive) {
+                          if (isChecked) {
+                            nextList = [];
+                          } else {
+                            nextList = [opt];
+                          }
+                          update({ text: nextList.join(", "), details: "" });
+                          return;
+                        }
+
+                        const filteredList =
+                          question.exclusiveOptionIndex !== undefined
+                            ? selectedList.filter(
+                                (s) => s !== question.options![lang][question.exclusiveOptionIndex!]
+                              )
+                            : selectedList;
+
+                        if (isOther) {
+                          if (isChecked) {
+                            nextList = filteredList.filter(
+                              (s) =>
+                                s !== opt &&
+                                !s.startsWith(opt + " - ") &&
+                                !s.startsWith(opt + ": ") &&
+                                s !== "Other" &&
+                                !s.startsWith("Other - ")
+                            );
+                            update({ text: nextList.join(", "), details: "" });
+                          } else {
+                            const details = current.details?.trim();
+                            const otherVal = details ? `${opt} - ${details}` : opt;
+                            nextList = [...filteredList, otherVal];
+                            update({ text: nextList.join(", ") });
+                          }
+                        } else {
+                          nextList = isChecked
+                            ? filteredList.filter((s) => s !== opt)
+                            : [...filteredList, opt];
+                          update({ text: nextList.join(", ") });
+                        }
+                      }}
+                      className={`w-full min-h-[52px] flex items-center gap-3.5 px-4 sm:px-5 py-3.5 text-left text-sm sm:text-base rounded-xl border-2 transition-all ${
+                        isChecked
+                          ? "border-primary bg-primary/10 shadow-sm"
+                          : "border-border bg-card hover:border-primary/40 active:scale-[0.98]"
+                      }`}
+                    >
+                      <span
+                        className={`flex-shrink-0 h-5 w-5 sm:h-6 sm:w-6 rounded border-2 flex items-center justify-center transition-all ${
+                          isChecked
+                            ? "border-primary bg-primary"
+                            : "border-muted-foreground/40"
+                        }`}
+                      >
+                        {isChecked && (
+                          <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 stroke-[3] text-primary-foreground" />
+                        )}
+                      </span>
+                      <span className={isChecked ? "font-semibold" : ""}>{opt}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Other text input for Checkboxes */}
+                {question.allowOther && (() => {
+                  const otherOpt = question.options![lang][question.options![lang].length - 1]!;
+                  const selectedList = current.text
+                    ? current.text
+                        .split(", ")
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                    : [];
+
+                  const isOtherChecked = selectedList.some(
+                    (s) =>
+                      s === otherOpt ||
+                      s.startsWith(otherOpt + " - ") ||
+                      s.startsWith(otherOpt + ": ") ||
+                      s === "Other" ||
+                      s.startsWith("Other - ")
+                  );
+
+                  if (!isOtherChecked) return null;
+
+                  const otherEntry = selectedList.find(
+                    (s) =>
+                      s.startsWith(otherOpt + " - ") ||
+                      s.startsWith(otherOpt + ": ") ||
+                      s.startsWith("Other - ")
+                  );
+                  const existingDetails =
+                    current.details ??
+                    (otherEntry ? otherEntry.split(/ - |: /).slice(1).join(" - ") : "");
+
+                  return (
+                    <div className="mt-2.5 p-3.5 rounded-xl bg-muted/40 border border-border animate-in fade-in">
+                      <label className="block text-xs sm:text-sm font-medium text-foreground mb-1.5">
+                        {t.specifyOther}
+                      </label>
+                      <input
+                        aria-label={t.specifyOther}
+                        value={existingDetails}
+                        onChange={(e) => {
+                          const details = e.target.value;
+                          const updatedList = selectedList.map((item) => {
+                            if (
+                              item === otherOpt ||
+                              item.startsWith(otherOpt + " - ") ||
+                              item.startsWith(otherOpt + ": ") ||
+                              item === "Other" ||
+                              item.startsWith("Other - ")
+                            ) {
+                              return details.trim() ? `${otherOpt} - ${details.trim()}` : otherOpt;
+                            }
+                            return item;
+                          });
+                          update({
+                            details,
+                            text: updatedList.join(", "),
+                          });
+                        }}
+                        placeholder={t.specifyOther}
+                        className="w-full min-h-[46px] px-3.5 py-2.5 text-sm sm:text-base rounded-lg border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Q20: File Upload (Photos / Videos) */}
+            {question.type === "file_upload" && (
+              <div className="space-y-3.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={handleFileChange}
+                  disabled={isCompressing}
+                  className="hidden"
+                  id="survey-media-upload"
+                  aria-label="Upload photos or videos"
+                />
+
+                {(!current.files || current.files.length === 0) && !current.fileUrl ? (
+                  <label
+                    htmlFor="survey-media-upload"
+                    className={`flex flex-col items-center justify-center gap-2.5 rounded-2xl border-2 border-dashed border-border bg-card shadow-xs p-6 sm:p-8 text-center transition-all ${
+                      isCompressing
+                        ? "cursor-wait opacity-70"
+                        : "cursor-pointer hover:border-primary hover:shadow-sm active:scale-[0.98]"
+                    }`}
+                  >
+                    <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      {isCompressing ? (
+                        <Loader2 className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <Upload className="h-6 w-6" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm sm:text-base font-semibold text-foreground">
+                        {isCompressing ? "Compressing media..." : t.uploadPhotosVideos}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">{t.uploadHint}</p>
+                    </div>
+                  </label>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      {(current.files && current.files.length > 0
+                        ? current.files
+                        : [
+                            {
+                              fileUrl: current.fileUrl!,
+                              fileName: current.fileName,
+                              fileType: current.fileType,
+                              fileSize: undefined,
+                            },
+                          ]
+                      ).map((fileItem, fIdx) => (
+                        <div
+                          key={fIdx}
+                          className="flex items-center justify-between gap-3 rounded-xl border-2 border-border bg-card p-2.5 sm:p-3 shadow-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {fileItem.fileType?.startsWith("image/") ? (
+                              <img
+                                src={fileItem.fileUrl}
+                                alt="Preview"
+                                className="h-11 w-11 sm:h-12 sm:w-12 rounded-lg object-cover border border-border shrink-0"
+                              />
+                            ) : fileItem.fileType?.startsWith("video/") ? (
+                              <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                                <Film className="h-5 w-5" />
+                              </div>
+                            ) : (
+                              <div className="flex h-11 w-11 sm:h-12 sm:w-12 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                                <Paperclip className="h-5 w-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs sm:text-sm font-medium text-foreground truncate">
+                                {fileItem.fileName || t.fileAttached}
+                              </p>
+                              {fileItem.fileSize ? (
+                                <p className="text-[11px] text-muted-foreground">
+                                  {(fileItem.fileSize / 1024).toFixed(0)} KB
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSpecificFile(fIdx)}
+                            className="p-2 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+                            aria-label={`${t.removeFile} ${fileItem.fileName}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <label
+                        htmlFor="survey-media-upload"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-muted/70 text-foreground transition-all ${
+                          isCompressing
+                            ? "cursor-wait opacity-60"
+                            : "cursor-pointer hover:bg-accent active:scale-95"
+                        }`}
+                      >
+                        <Upload className="h-3.5 w-3.5 text-primary" />
+                        <span>
+                          {isCompressing ? "Compressing..." : t.uploadMoreFiles}
+                        </span>
+                      </label>
+                      <span className="text-xs text-muted-foreground">
+                        {current.files?.length || 1} {t.filesAttached}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Voice Input */}
+            {question.type !== "choice" &&
+              question.type !== "checkbox" &&
+              question.type !== "file_upload" &&
+              question.type !== "number_unit" && (
+                <VoiceInput
+                  lang={lang}
+                  questionType={question.type}
+                  disableAudioRecording={question.id === "name" || question.id === "phone"}
+                  existingText={current.text}
+                  onTranscript={(text) =>
+                    update({ text: current.text ? `${current.text} ${text}` : text })
+                  }
+                  audioUrl={current.audioUrl}
+                  onRecordingChange={setIsRecordingAudio}
+                  onAudio={(blob, previewUrl) => {
+                    if (blob && previewUrl) {
+                      audioBlobsRef.current[question.id] = blob;
+                      update({ text: "", audioUrl: previewUrl });
+                    } else {
+                      delete audioBlobsRef.current[question.id];
+                      update({ audioUrl: undefined });
+                    }
+                  }}
+                  onRecordStart={() => {
+                    if (current.audioUrl?.startsWith("blob:")) {
+                      URL.revokeObjectURL(current.audioUrl);
+                    }
+                    delete audioBlobsRef.current[question.id];
+                    update({ text: "", audioUrl: undefined });
+                  }}
+                />
+              )}
+
+            {/* Error Banner with ARIA live */}
+            {error && (
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="mt-3.5 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in"
+              >
+                <p className="text-xs sm:text-sm font-semibold text-destructive">{error}</p>
+              </div>
+            )}
+
+            {/* Navigation Buttons */}
+            <div className="mt-5 flex items-center gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 min-h-[48px] px-4 sm:px-5 py-3 rounded-xl text-sm sm:text-base font-medium text-foreground bg-card border-2 border-border transition-all hover:bg-accent active:scale-[0.97]"
+                aria-label="Previous question"
+              >
+                <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span>{t.back}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={submitting || isCompressing}
+                className="flex-[2] sm:flex-[3] inline-flex items-center justify-center gap-2 min-h-[48px] px-5 sm:px-6 py-3 rounded-xl text-sm sm:text-base font-semibold bg-primary text-primary-foreground shadow-sm transition-all hover:bg-primary/90 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.97]"
+                aria-label={step === total - 1 ? t.submit : t.next}
+              >
+                {(submitting || isCompressing) && (
+                  <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
+                )}
+                <span>
+                  {submitting && uploadProgress && uploadProgress.total > 0
+                    ? `Uploading ${uploadProgress.current}/${uploadProgress.total}...`
+                    : step === total - 1
+                    ? t.submit
+                    : t.next}
+                </span>
+                {!(submitting || isCompressing) && step < total - 1 && (
+                  <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Progress Indicator at Bottom */}
-      <div className="mt-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          {LANGUAGES.find((l) => l.code === lang)?.native} · {step + 1}/{total}
+      {/* Progress Footer */}
+      <div className="mt-6 sm:mt-8 text-center">
+        <p className="text-xs text-muted-foreground font-medium">
+          {LANGUAGES.find((l) => l.code === lang)?.native} · {step + 1} of {total} · {Math.round(progress)}%
         </p>
       </div>
 
-      {/* Submit Confirmation Dialog */}
+      {/* Confirmation Modal */}
       {showConfirm && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-6 sm:pb-0"
           onClick={() => setShowConfirm(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-dialog-title"
         >
           <div
-            className="w-full max-w-sm bg-card rounded-2xl shadow-2xl border border-border p-6 animate-in fade-in slide-in-from-bottom-4 duration-300"
+            className="w-full max-w-sm bg-card rounded-2xl shadow-2xl border border-border p-5 sm:p-6 animate-in fade-in slide-in-from-bottom-4 duration-300"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-2.5">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
                 <Check className="h-5 w-5 text-primary" />
               </div>
-              <h2 className="text-base font-semibold text-foreground">{t.confirmTitle}</h2>
+              <h2 id="confirm-dialog-title" className="text-base font-bold text-foreground">
+                {t.confirmTitle}
+              </h2>
             </div>
-            <p className="text-sm text-muted-foreground mb-5 pl-[52px]">{t.confirmMsg}</p>
-            <div className="flex gap-3">
+            <p className="text-xs sm:text-sm text-muted-foreground mb-5 pl-[52px] leading-relaxed">
+              {t.confirmMsg}
+            </p>
+            <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium border-2 border-border text-foreground hover:bg-accent transition-all active:scale-[0.97]"
+                className="flex-1 min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium border-2 border-border text-foreground hover:bg-accent transition-all active:scale-[0.97]"
               >
                 {t.confirmCancel}
               </button>
               <button
                 type="button"
                 onClick={handleConfirmedSubmit}
-                className="flex-[2] px-4 py-2.5 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-700 text-white shadow-md transition-all active:scale-[0.97]"
+                className="flex-[2] min-h-[44px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold bg-green-600 hover:bg-green-700 text-white shadow-sm transition-all active:scale-[0.97]"
               >
                 {t.confirmYes}
               </button>
@@ -1605,115 +1594,16 @@ function SurveyPage() {
   );
 }
 
-
-
-async function reverseGeocodeLocation(
-  latitude: number,
-  longitude: number
-): Promise<{ state: string; city: string }> {
-  let state = "";
-  let city = "";
-
-  // 1. Try BigDataCloud reverse geocode client API
-  try {
-    const res = await fetch(
-      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
-    );
-    if (res.ok) {
-      const data = await res.json();
-      state = data.principalSubdivision || "";
-      
-      city = data.city || data.locality || "";
-
-      if (!city && Array.isArray(data.localityInfo?.administrative)) {
-        const adminList = data.localityInfo.administrative;
-        const candidate = adminList.find(
-          (a: any) =>
-            (a.adminLevel === 6 || a.adminLevel === 8 || a.adminLevel === 7 || a.adminLevel === 5) &&
-            a.name &&
-            !a.name.toLowerCase().includes("india") &&
-            a.name.toLowerCase() !== state.toLowerCase()
-        );
-        if (candidate) {
-          city = candidate.name;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn("BigDataCloud geocode error:", err);
-  }
-
-  // 2. Try OpenStreetMap Nominatim fallback if city or state is missing
-  if (!state || !city) {
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=14`,
-        {
-          headers: {
-            "Accept-Language": "en",
-          },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const addr = data.address || {};
-        if (!state) state = addr.state || "";
-        if (!city) {
-          const rawCity =
-            addr.city ||
-            addr.town ||
-            addr.municipality ||
-            addr.suburb ||
-            addr.village ||
-            addr.county ||
-            addr.state_district ||
-            "";
-          city = rawCity;
-        }
-      }
-    } catch (err) {
-      console.warn("Nominatim geocode error:", err);
-    }
-  }
-
-  // Clean city name (strip administrative suffixes like "District", "Division", etc.)
-  if (city) {
-    city = city.replace(/\s*(District|Division|Taluka|Tahsil|Mandal|Corporation|City)\s*$/gi, "").trim();
-  }
-
-  return { state, city };
-}
-
-function findStateOption(detectedState: string): StateOption | undefined {
-  if (!detectedState) return undefined;
-  const cleanDetected = detectedState
-    .toLowerCase()
-    .replace(/state of|state|\bpradesh\b/gi, "")
-    .trim();
-
-  return INDIAN_STATES.find((s) => {
-    const enLower = s.en.toLowerCase();
-    const cleanEn = enLower.replace(/\bpradesh\b/gi, "").trim();
-    return (
-      enLower === detectedState.toLowerCase() ||
-      enLower.includes(detectedState.toLowerCase()) ||
-      detectedState.toLowerCase().includes(enLower) ||
-      (cleanDetected.length > 2 && cleanEn.includes(cleanDetected))
-    );
-  });
-}
-
+// ─── City Input with Geolocation & Quick Cities ──────────────────────────────
 function CityInput({
   value,
   onChange,
-  onLocationDetected,
-  lang,
+  lang: _lang,
   t,
   onEnter,
 }: {
   value: string;
   onChange: (val: string) => void;
-  onLocationDetected?: (loc: { state?: string; city?: string }) => void;
   lang: Lang;
   t: (typeof UI)[Lang];
   onEnter: () => void;
@@ -1722,7 +1612,7 @@ function CityInput({
 
   const handleDetectCity = () => {
     if (typeof window === "undefined" || !navigator.geolocation) {
-      toast.error(t.locationError || "Geolocation is not supported");
+      toast.error(t.locationError);
       return;
     }
 
@@ -1731,39 +1621,23 @@ function CityInput({
       async (pos) => {
         try {
           const { latitude, longitude } = pos.coords;
-          const { state, city } = await reverseGeocodeLocation(latitude, longitude);
-
-          if (!city && !state) {
-            toast.error(t.locationError || "Could not detect city from location.");
-            setIsLocating(false);
-            return;
+          const res = await fetch(
+            `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            const detected = data.city || data.locality || "";
+            if (detected) {
+              const cleanCity = detected.replace(/\s*(City|Taluka|District)\s*$/gi, "").trim();
+              onChange(cleanCity);
+              toast.success(`${t.locationDetected}${cleanCity}`);
+            } else {
+              toast.error(t.locationError);
+            }
           }
-
-          const matched = findStateOption(state);
-          const stateLabel = matched
-            ? lang === "hi"
-              ? matched.hi
-              : lang === "mr"
-              ? matched.mr
-              : matched.en
-            : state;
-
-          if (city) {
-            onChange(city);
-          }
-
-          if (onLocationDetected) {
-            const loc: { state?: string; city?: string } = {};
-            if (stateLabel) loc.state = stateLabel;
-            if (city) loc.city = city;
-            onLocationDetected(loc);
-          }
-
-          const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
-          toast.success(`${t.locationDetected || "Detected: "}${displayLoc}`);
         } catch (err) {
           console.error("Geocoding error:", err);
-          toast.error(t.locationError || "Could not detect city.");
+          toast.error(t.locationError);
         } finally {
           setIsLocating(false);
         }
@@ -1771,13 +1645,9 @@ function CityInput({
       (err) => {
         setIsLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-          toast.error(
-            t.locationDenied || "Location permission denied. Please enter manually."
-          );
+          toast.error(t.locationDenied);
         } else {
-          toast.error(
-            t.locationError || "Location request timed out or unavailable."
-          );
+          toast.error(t.locationError);
         }
       },
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
@@ -1785,33 +1655,61 @@ function CityInput({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-end mb-1">
+    <div className="space-y-2.5">
+      {/* Quick Select Chips */}
+      <div>
+        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+          Quick select popular cities:
+        </span>
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+          {QUICK_CITIES.map((c) => {
+            const isSelected = value.toLowerCase() === c.toLowerCase();
+            return (
+              <button
+                key={c}
+                type="button"
+                role="button"
+                aria-pressed={isSelected}
+                onClick={() => onChange(c)}
+                className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium border transition-all ${
+                  isSelected
+                    ? "bg-primary text-primary-foreground border-primary shadow-xs scale-102"
+                    : "bg-card border-border hover:border-primary/50 hover:bg-primary/5 active:scale-95"
+                }`}
+              >
+                {c}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between pt-0.5">
+        <label htmlFor="city-input" className="sr-only">
+          {t.yourAnswer}
+        </label>
         <button
           type="button"
           onClick={handleDetectCity}
           disabled={isLocating}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50 active:scale-95"
-          title={t.detectLocation || "Use current location"}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors ml-auto pb-0.5"
+          title={t.detectLocation}
         >
           {isLocating ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <MapPin className="w-3.5 h-3.5" />
           )}
-          <span>
-            {isLocating
-              ? t.detectingLocation || "Detecting..."
-              : t.detectLocation || "Use current location"}
-          </span>
+          <span>{isLocating ? t.detectingLocation : t.detectLocation}</span>
         </button>
       </div>
+
       <input
-        id="city"
+        id="city-input"
         name="city"
         type="text"
-        inputMode="text"
         autoComplete="address-level2"
+        aria-label="Which city are you from?"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -1820,325 +1718,36 @@ function CityInput({
             onEnter();
           }
         }}
-        placeholder={t.cityPlaceholder || t.yourAnswer}
-        className="w-full px-4 py-3.5 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
+        placeholder={t.cityPlaceholder}
+        className="w-full min-h-[52px] px-4 py-3 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
       />
     </div>
   );
 }
 
-function StateSelector({
-  value,
-  onChange,
-  onLocationDetected,
-  lang,
-  t,
-  onEnter,
-}: {
-  value: string;
-  onChange: (val: string) => void;
-  onLocationDetected?: (loc: { state?: string; city?: string }) => void;
-  lang: Lang;
-  t: (typeof UI)[Lang];
-  onEnter: () => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isLocating, setIsLocating] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const popularStates = useMemo(() => INDIAN_STATES.filter((s) => s.isPopular), []);
-
-  const getStateLabel = (s: StateOption) => {
-    if (lang === "hi") return s.hi;
-    if (lang === "mr") return s.mr;
-    return s.en;
-  };
-
-  const isStateSelected = (s: StateOption) => {
-    const v = (value || "").trim().toLowerCase();
-    return (
-      v === s.en.toLowerCase() ||
-      v === s.hi.toLowerCase() ||
-      v === s.mr.toLowerCase()
-    );
-  };
-
-  const filteredStates = useMemo(() => {
-    if (!searchQuery.trim()) return INDIAN_STATES;
-    const q = searchQuery.toLowerCase().trim();
-    return INDIAN_STATES.filter(
-      (s) =>
-        s.en.toLowerCase().includes(q) ||
-        s.hi.toLowerCase().includes(q) ||
-        s.mr.toLowerCase().includes(q)
-    );
-  }, [searchQuery]);
-
-  const handleSelect = (stateOption: StateOption) => {
-    const label = getStateLabel(stateOption);
-    onChange(label);
-    setSearchQuery("");
-    setIsOpen(false);
-  };
-
-  const handleDetectLocation = () => {
-    if (typeof window === "undefined" || !navigator.geolocation) {
-      toast.error(t.locationError || "Geolocation is not supported");
-      return;
-    }
-
-    setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          const { state, city } = await reverseGeocodeLocation(latitude, longitude);
-
-          if (!state && !city) {
-            toast.error(t.locationError || "Could not detect state from location.");
-            setIsLocating(false);
-            return;
-          }
-
-          const matched = findStateOption(state);
-          const stateLabel = matched ? getStateLabel(matched) : state;
-
-          if (stateLabel) {
-            onChange(stateLabel);
-          }
-
-          if (onLocationDetected) {
-            const loc: { state?: string; city?: string } = {};
-            if (stateLabel) loc.state = stateLabel;
-            if (city) loc.city = city;
-            onLocationDetected(loc);
-          }
-
-          const displayLoc = [city, stateLabel].filter(Boolean).join(", ");
-          toast.success(`${t.locationDetected || "Detected: "}${displayLoc}`);
-        } catch (err) {
-          console.error("Geocoding error:", err);
-          toast.error(t.locationError || "Could not detect location.");
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (err) => {
-        setIsLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          toast.error(
-            t.locationDenied ||
-              "Location permission denied. Please select manually."
-          );
-        } else {
-          toast.error(
-            t.locationError ||
-              "Location request timed out or unavailable."
-          );
-        }
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
-    );
-  };
-
-  return (
-    <div className="space-y-4 text-left" ref={containerRef}>
-      {/* 1-Tap Popular States Chips */}
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5 block">
-          {t.popularStates || "Quick select"}
-        </label>
-        <div className="flex flex-wrap gap-2 sm:gap-2.5">
-          {popularStates.map((s) => {
-            const label = getStateLabel(s);
-            const isSelected = isStateSelected(s);
-            return (
-              <button
-                key={s.en}
-                type="button"
-                onClick={() => {
-                  if (isSelected) {
-                    onChange("");
-                  } else {
-                    handleSelect(s);
-                  }
-                }}
-                className={`px-3.5 py-2 rounded-xl text-sm sm:text-base font-medium border-2 transition-all flex items-center gap-1.5 ${
-                  isSelected
-                    ? "bg-primary text-primary-foreground border-primary shadow-md scale-105"
-                    : "bg-card border-border hover:border-primary/50 hover:bg-primary/5 active:scale-95"
-                }`}
-              >
-                {isSelected && <Check className="w-4 h-4" />}
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Searchable Dropdown / Custom Input */}
-      <div className="relative">
-        <div className="flex items-center justify-between mb-1.5">
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-            {t.allStates || "All States & UTs"}
-          </label>
-          <button
-            type="button"
-            onClick={handleDetectLocation}
-            disabled={isLocating}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-50 active:scale-95"
-            title={t.detectLocation || "Use current location"}
-          >
-            {isLocating ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <MapPin className="w-3.5 h-3.5" />
-            )}
-            <span>
-              {isLocating
-                ? t.detectingLocation || "Detecting..."
-                : t.detectLocation || "Use current location"}
-            </span>
-          </button>
-        </div>
-
-        <div className="relative flex items-center">
-          <input
-            type="text"
-            value={isOpen ? searchQuery : (value || searchQuery)}
-            onFocus={() => {
-              setIsOpen(true);
-            }}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              onChange(val);
-              if (!isOpen) setIsOpen(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                const first = filteredStates[0];
-                if (isOpen && filteredStates.length === 1 && first) {
-                  e.preventDefault();
-                  handleSelect(first);
-                  onEnter();
-                } else if (!isOpen) {
-                  e.preventDefault();
-                  onEnter();
-                }
-              } else if (e.key === "Escape") {
-                setIsOpen(false);
-              }
-            }}
-            placeholder={t.searchState || "Search or select state..."}
-            className="w-full px-4 py-3.5 pl-10 pr-20 text-base sm:text-lg rounded-xl border-2 border-border bg-card outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder:text-muted-foreground/50"
-          />
-          <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 pointer-events-none" />
-
-          <div className="absolute right-2.5 flex items-center gap-1">
-            {value && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange("");
-                  setSearchQuery("");
-                }}
-                className="p-1.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title={t.clearSelection || "Clear"}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setIsOpen((prev) => !prev)}
-              className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              title="Toggle state list"
-            >
-              <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Dropdown Menu */}
-        {isOpen && (
-          <div className="absolute z-30 mt-1.5 w-full bg-popover/95 backdrop-blur-md border-2 border-border rounded-xl shadow-xl max-h-60 overflow-y-auto p-1.5 space-y-1">
-            {filteredStates.length > 0 ? (
-              filteredStates.map((s) => {
-                const label = getStateLabel(s);
-                const isSelected = isStateSelected(s);
-                return (
-                  <button
-                    key={s.en}
-                    type="button"
-                    onClick={() => handleSelect(s)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-left text-sm sm:text-base transition-colors ${
-                      isSelected
-                        ? "bg-primary text-primary-foreground font-medium"
-                        : "hover:bg-primary/10 hover:text-primary text-foreground"
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {lang !== "en" && (
-                      <span
-                        className={`text-xs ${
-                          isSelected ? "text-primary-foreground/80" : "text-muted-foreground"
-                        }`}
-                      >
-                        {s.en}
-                      </span>
-                    )}
-                  </button>
-                );
-              })
-            ) : (
-              <div className="px-4 py-3 text-center text-xs sm:text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">"{searchQuery}"</p>
-                <p className="mt-1 text-xs opacity-75">{t.otherState || "Custom state value used"}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
+// ─── Outer Shell ─────────────────────────────────────────────────────────────
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <main className="min-h-screen survey-form-shell px-4 py-8 sm:py-14 pb-8 sm:pb-12 flex flex-col justify-between">
+    <main className="min-h-[100dvh] survey-form-shell px-3 sm:px-4 py-4 sm:py-10 pb-6 sm:pb-12 flex flex-col justify-between overflow-x-hidden">
       <Toaster
         position="bottom-center"
         toastOptions={{
           style: {
-            fontSize: "0.8rem",
-            padding: "8px 14px",
-            minHeight: "unset",
-            gap: "8px",
-            borderRadius: "8px",
+            fontSize: "0.85rem",
+            padding: "10px 16px",
+            borderRadius: "10px",
           },
         }}
       />
       <div className="mx-auto w-full max-w-2xl survey-glass-panel flex-1">{children}</div>
-      <footer className="mt-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          Powered by KKWIEER – MCA
+      <footer className="mt-6 sm:mt-8 text-center space-y-1 px-2">
+        <p className="text-xs font-semibold text-foreground/80">
+          K K Wagh Institute of Engineering Education and Research, Nashik · Department of MCA
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Kumbh Mela Research & Visitor Experience Survey
         </p>
       </footer>
     </main>
   );
 }
-

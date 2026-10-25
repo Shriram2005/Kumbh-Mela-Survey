@@ -2,13 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   QUESTIONS,
+  SECTIONS,
   loadResponses,
   type StoredResponse,
   type Lang,
 } from "@/lib/survey";
 import {
   Search,
-  Download,
   RefreshCw,
   ChevronDown,
   ChevronUp,
@@ -21,7 +21,9 @@ import {
   Paperclip,
   Film,
   Phone,
-  Mail,
+  MessageCircle,
+  MapPin,
+  Sparkles,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -65,7 +67,7 @@ async function exportToExcel(responses: StoredResponse[]) {
     "Response ID",
     "Submitted At",
     "Language",
-    ...QUESTIONS.map((q) => q.label.en),
+    ...QUESTIONS.map((q) => `[Sec ${q.section}] ${q.label.en}`),
   ];
 
   const rows = responses.map((r) => {
@@ -90,16 +92,13 @@ async function exportToExcel(responses: StoredResponse[]) {
       const hasFiles = allFiles.length > 0;
       const fileUrlsStr = allFiles.map((f) => f.fileUrl).join(", ");
 
-      // Only files, no text and no audio
       if (hasFiles && !text && !hasAudio) {
         return fileUrlsStr;
       }
-      // Only audio, no text and no file
       if (hasAudio && !text && !hasFiles) {
         return ans.audioUrl!;
       }
 
-      // If text exists along with file/audio, combine cleanly in single column
       let result = text;
       if (hasFiles) {
         result = result ? `${result} (Files: ${fileUrlsStr})` : `(Files: ${fileUrlsStr})`;
@@ -115,20 +114,19 @@ async function exportToExcel(responses: StoredResponse[]) {
 
   const ws = utils.aoa_to_sheet([headers, ...rows]);
 
-  // Auto-fit column widths (capped at 50 to prevent overflow on long URLs)
   ws["!cols"] = headers.map((h, i) => ({
     wch: Math.max(
       h.length,
       ...rows.map((r) => {
         const val = String(r[i] ?? "");
         return Math.min(val.length, 50);
-      }),
+      })
     ),
   }));
 
   const wb = utils.book_new();
-  utils.book_append_sheet(wb, ws, "Responses");
-  writeFile(wb, `kumbh-mela-survey-${Date.now()}.xlsx`);
+  utils.book_append_sheet(wb, ws, "Kumbh Mela Responses");
+  writeFile(wb, `kumbh-mela-survey-responses-${Date.now()}.xlsx`);
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -168,31 +166,28 @@ function AdminPage() {
         acc[r.lang] = (acc[r.lang] ?? 0) + 1;
         return acc;
       },
-      {} as Record<string, number>,
+      {} as Record<string, number>
     );
 
-    const RATING_MAP: Record<string, number> = {
-      "5": 5, "4": 4, "3": 3, "2": 2, "1": 1,
-      "Excellent": 5, "उत्कृष्ट": 5,
-      "Good": 4, "अच्छा": 4, "चांगले": 4,
-      "Average": 3, "औसत": 3, "सरासरी": 3, "Fair": 3, "सामान्य": 3, "साधारण": 3,
-      "Poor": 2, "खराब": 2, "वाईट": 2,
-      "Very Poor": 1, "बहुत खराब": 1, "खूप वाईट": 1,
+    const SATISFACTION_SCORES: Record<string, number> = {
+      "Very Satisfied": 5, "बहुत संतुष्ट": 5, "खूप समाधानी": 5,
+      "Satisfied": 4, "संतुष्ट": 4, "समाधानी": 4,
+      "Neutral": 3, "तटस्थ": 3,
+      "Dissatisfied": 2, "असंतोषजनक": 2, "असमाधानी": 2,
+      "Very Dissatisfied": 1, "बहुत असंतोषजनक": 1, "खूप असमाधानी": 1,
     };
 
-    const ratings = responses
+    const satScores = responses
       .map((r) => {
-        const val = r.answers["experience"]?.text;
+        const val = r.answers["facilities_satisfaction"]?.text || r.answers["facilities_satisfaction"]?.choice;
         if (!val) return null;
-        if (RATING_MAP[val] !== undefined) return RATING_MAP[val];
-        const num = parseFloat(val);
-        return isNaN(num) ? null : num;
+        return SATISFACTION_SCORES[val] ?? null;
       })
       .filter((n): n is number => n !== null);
 
-    const avgRating =
-      ratings.length > 0
-        ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
+    const avgSatisfaction =
+      satScores.length > 0
+        ? (satScores.reduce((a, b) => a + b, 0) / satScores.length).toFixed(1)
         : "—";
 
     let totalAudioRecordings = 0;
@@ -220,13 +215,27 @@ function AdminPage() {
       }
     });
 
-    return { byLang, avgRating, withAudioCount, totalAudioRecordings, withFilesCount, totalFiles };
+    return {
+      byLang,
+      avgSatisfaction,
+      withAudioCount,
+      totalAudioRecordings,
+      withFilesCount,
+      totalFiles,
+    };
   }, [responses]);
 
   // Visual Analytics Chart Data
   const chartData = useMemo(() => {
     if (responses.length === 0) {
-      return { overTime: [], ratings: [], languages: [], states: [], previousKumbh: [] };
+      return {
+        overTime: [],
+        satisfaction: [],
+        crowdRating: [],
+        languages: [],
+        cities: [],
+        previousKumbh: [],
+      };
     }
 
     // 1. Responses over time
@@ -248,39 +257,67 @@ function AdminPage() {
       responses: count,
     }));
 
-    // 2. Rating distribution
-    const RATING_LOOKUP: Record<string, string> = {
-      "5": "5 Stars", "4": "4 Stars", "3": "3 Stars", "2": "2 Stars", "1": "1 Star",
-      "Excellent": "5 Stars", "उत्कृष्ट": "5 Stars",
-      "Good": "4 Stars", "अच्छा": "4 Stars", "चांगले": "4 Stars",
-      "Average": "3 Stars", "औसत": "3 Stars", "सरासरी": "3 Stars", "Fair": "3 Stars", "सामान्य": "3 Stars", "साधारण": "3 Stars",
-      "Poor": "2 Stars", "खराब": "2 Stars", "वाईट": "2 Stars",
-      "Very Poor": "1 Star", "बहुत खराब": "1 Star", "खूप वाईट": "1 Star",
-    };
-
-    const ratingCounts: Record<string, number> = {
-      "5 Stars": 0,
-      "4 Stars": 0,
-      "3 Stars": 0,
-      "2 Stars": 0,
-      "1 Star": 0,
+    // 2. Facilities Satisfaction distribution (Q10)
+    const satCounts: Record<string, number> = {
+      "Very Satisfied": 0,
+      "Satisfied": 0,
+      "Neutral": 0,
+      "Dissatisfied": 0,
+      "Very Dissatisfied": 0,
     };
 
     responses.forEach((r) => {
-      const val = r.answers["experience"]?.text;
+      const val = r.answers["facilities_satisfaction"]?.text || r.answers["facilities_satisfaction"]?.choice;
       if (!val) return;
-      const key = RATING_LOOKUP[val];
-      if (key) {
-        ratingCounts[key] = (ratingCounts[key] ?? 0) + 1;
+      if (val.includes("Very Satisfied") || val.includes("बहुत संतुष्ट") || val.includes("खूप समाधानी")) {
+        satCounts["Very Satisfied"] = (satCounts["Very Satisfied"] ?? 0) + 1;
+      } else if (val.includes("Satisfied") || val.includes("संतुष्ट") || val.includes("समाधानी")) {
+        satCounts["Satisfied"] = (satCounts["Satisfied"] ?? 0) + 1;
+      } else if (val.includes("Neutral") || val.includes("तटस्थ")) {
+        satCounts["Neutral"] = (satCounts["Neutral"] ?? 0) + 1;
+      } else if (val.includes("Very Dissatisfied") || val.includes("बहुत असंतोषजनक") || val.includes("खूप असमाधानी")) {
+        satCounts["Very Dissatisfied"] = (satCounts["Very Dissatisfied"] ?? 0) + 1;
+      } else if (val.includes("Dissatisfied") || val.includes("असंतोषजनक") || val.includes("असमाधानी")) {
+        satCounts["Dissatisfied"] = (satCounts["Dissatisfied"] ?? 0) + 1;
       }
     });
 
-    const ratings = Object.entries(ratingCounts).map(([rating, count]) => ({
+    const satisfaction = Object.entries(satCounts).map(([rating, count]) => ({
       rating,
       count,
     }));
 
-    // 3. Language distribution
+    // 3. Crowd Management Rating (Q13)
+    const crowdCounts: Record<string, number> = {
+      "Excellent": 0,
+      "Good": 0,
+      "Fair": 0,
+      "Poor": 0,
+      "Very Poor": 0,
+    };
+
+    responses.forEach((r) => {
+      const val = r.answers["crowd_management_rating"]?.text || r.answers["crowd_management_rating"]?.choice;
+      if (!val) return;
+      if (val.includes("Excellent") || val.includes("उत्कृष्ट")) {
+        crowdCounts["Excellent"] = (crowdCounts["Excellent"] ?? 0) + 1;
+      } else if (val.includes("Good") || val.includes("अच्छा") || val.includes("चांगले")) {
+        crowdCounts["Good"] = (crowdCounts["Good"] ?? 0) + 1;
+      } else if (val.includes("Fair") || val.includes("सामान्य") || val.includes("साधारण")) {
+        crowdCounts["Fair"] = (crowdCounts["Fair"] ?? 0) + 1;
+      } else if (val.includes("Very Poor") || val.includes("बहुत खराब") || val.includes("खूप वाईट")) {
+        crowdCounts["Very Poor"] = (crowdCounts["Very Poor"] ?? 0) + 1;
+      } else if (val.includes("Poor") || val.includes("खराब") || val.includes("वाईट")) {
+        crowdCounts["Poor"] = (crowdCounts["Poor"] ?? 0) + 1;
+      }
+    });
+
+    const crowdRating = Object.entries(crowdCounts).map(([rating, count]) => ({
+      rating,
+      count,
+    }));
+
+    // 4. Language distribution
     const langCounts: Record<string, number> = { English: 0, Hindi: 0, Marathi: 0 };
     responses.forEach((r) => {
       const label = LANG_LABELS[r.lang] ?? r.lang;
@@ -293,28 +330,28 @@ function AdminPage() {
       { name: "Marathi", value: langCounts["Marathi"] ?? 0, color: "#ec4899" },
     ].filter((l) => l.value > 0);
 
-    // 4. State / Location distribution
-    const stateMap = new Map<string, number>();
+    // 5. City distribution (Q3)
+    const cityMap = new Map<string, number>();
     responses.forEach((r) => {
-      const st = r.answers["state"]?.text?.trim();
-      if (st) {
-        const cleanSt = st.charAt(0).toUpperCase() + st.slice(1);
-        stateMap.set(cleanSt, (stateMap.get(cleanSt) ?? 0) + 1);
+      const city = r.answers["city"]?.text?.trim();
+      if (city) {
+        const cleanCity = city.charAt(0).toUpperCase() + city.slice(1);
+        cityMap.set(cleanCity, (cityMap.get(cleanCity) ?? 0) + 1);
       }
     });
 
-    const states = Array.from(stateMap.entries())
-      .map(([state, count]) => ({ state, count }))
+    const cities = Array.from(cityMap.entries())
+      .map(([city, count]) => ({ city, count }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      .slice(0, 7);
 
-    // 5. Previous Kumbh attendance distribution
+    // 6. Previous Kumbh attendance distribution (Q4)
     const kumbhCounts: Record<string, number> = {
-      "Prayagraj (2024)": 0,
-      "Haridwar (2010)": 0,
-      "Ujjain (2004)": 0,
+      "Prayagraj (2025)": 0,
+      "Haridwar (2021)": 0,
+      "Ujjain (2016)": 0,
       "Nashik (2015)": 0,
-      "First-time Visitor": 0,
+      "Other": 0,
     };
 
     responses.forEach((r) => {
@@ -322,27 +359,21 @@ function AdminPage() {
         r.answers["previous_kumbh"]?.text?.trim() ||
         r.answers["previous_kumbh"]?.choice?.trim();
       if (!val) return;
-      
-      let matched = false;
-      if (val.includes("2024") || val.includes("Prayagraj") || val.includes("प्रयागराज")) {
-        kumbhCounts["Prayagraj (2024)"] = (kumbhCounts["Prayagraj (2024)"] ?? 0) + 1;
-        matched = true;
+
+      if (val.includes("Prayagraj") || val.includes("2025") || val.includes("प्रयागराज")) {
+        kumbhCounts["Prayagraj (2025)"] = (kumbhCounts["Prayagraj (2025)"] ?? 0) + 1;
       }
-      if (val.includes("2010") || val.includes("Haridwar") || val.includes("हरिद्वार")) {
-        kumbhCounts["Haridwar (2010)"] = (kumbhCounts["Haridwar (2010)"] ?? 0) + 1;
-        matched = true;
+      if (val.includes("Haridwar") || val.includes("2021") || val.includes("हरिद्वार")) {
+        kumbhCounts["Haridwar (2021)"] = (kumbhCounts["Haridwar (2021)"] ?? 0) + 1;
       }
-      if (val.includes("2004") || val.includes("Ujjain") || val.includes("उज्जैन")) {
-        kumbhCounts["Ujjain (2004)"] = (kumbhCounts["Ujjain (2004)"] ?? 0) + 1;
-        matched = true;
+      if (val.includes("Ujjain") || val.includes("2016") || val.includes("उज्जैन")) {
+        kumbhCounts["Ujjain (2016)"] = (kumbhCounts["Ujjain (2016)"] ?? 0) + 1;
       }
-      if (val.includes("2015") || val.includes("Nashik") || val.includes("नासिक") || val.includes("नाशिक")) {
+      if (val.includes("Nashik") || val.includes("2015") || val.includes("नासिक") || val.includes("नाशिक")) {
         kumbhCounts["Nashik (2015)"] = (kumbhCounts["Nashik (2015)"] ?? 0) + 1;
-        matched = true;
       }
-      
-      if (!matched || val.includes("Have not attended") || val.includes("भाग नहीं लिया") || val.includes("सहभागी झालेलो नाही")) {
-        kumbhCounts["First-time Visitor"] = (kumbhCounts["First-time Visitor"] ?? 0) + 1;
+      if (val.includes("Other") || val.includes("अन्य") || val.includes("इतर")) {
+        kumbhCounts["Other"] = (kumbhCounts["Other"] ?? 0) + 1;
       }
     });
 
@@ -350,7 +381,7 @@ function AdminPage() {
       .map(([mela, count]) => ({ mela, count }))
       .filter((item) => item.count > 0);
 
-    return { overTime, ratings, languages, states, previousKumbh };
+    return { overTime, satisfaction, crowdRating, languages, cities, previousKumbh };
   }, [responses]);
 
   // Filtered
@@ -363,7 +394,7 @@ function AdminPage() {
       }
       if (filesOnly) {
         const hasFiles = Object.values(r.answers).some(
-          (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0),
+          (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0)
         );
         if (!hasFiles) return false;
       }
@@ -371,22 +402,17 @@ function AdminPage() {
         const q = search.toLowerCase();
         const matchId = r.id.toLowerCase().includes(q);
         const matchText = Object.values(r.answers).some(
-          (a) => a.text?.toLowerCase().includes(q) || a.choice?.toLowerCase().includes(q),
+          (a) => a.text?.toLowerCase().includes(q) || a.choice?.toLowerCase().includes(q)
         );
         const matchAudio =
           (q === "audio" || q === "voice" || q === "mic") &&
           Object.values(r.answers).some((a) => Boolean(a.audioUrl));
         const matchFile =
-          (q === "file" || q === "files" || q === "upload" || q === "image" || q === "video") &&
+          (q === "file" || q === "files" || q === "upload" || q === "photo" || q === "video") &&
           Object.values(r.answers).some(
-            (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0),
+            (a) => Boolean(a.fileUrl) || Boolean(a.files && a.files.length > 0)
           );
-        const matchFileName = Object.values(r.answers).some(
-          (a) =>
-            a.fileName?.toLowerCase().includes(q) ||
-            a.files?.some((f) => f.fileName?.toLowerCase().includes(q)),
-        );
-        return matchId || matchText || matchAudio || matchFile || matchFileName;
+        return matchId || matchText || matchAudio || matchFile;
       }
       return true;
     });
@@ -409,8 +435,15 @@ function AdminPage() {
       <header className="admin-header">
         <div className="admin-header-inner">
           <div className="admin-header-title-group">
-            <h1 className="admin-title">Survey Admin</h1>
-            <span className="admin-badge">Kumbh Mela 2025</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="admin-title">Kumbh Mela Survey Admin</h1>
+                <span className="admin-badge">K K Wagh MCA</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Visitor Experience & Technology Questionnaire Analytics
+              </p>
+            </div>
           </div>
           <div className="admin-header-actions">
             <button
@@ -431,7 +464,7 @@ function AdminPage() {
             >
               <FileSpreadsheet className="admin-btn-icon" />
               <span className="admin-btn-label">
-                {exporting ? "Exporting…" : "Export Excel"}
+                {exporting ? "Exporting…" : "Export Excel (21 Qs)"}
               </span>
             </button>
           </div>
@@ -462,8 +495,8 @@ function AdminPage() {
           />
           <StatCard
             icon={<Star className="stat-icon-svg" />}
-            label="Avg. Rating"
-            value={stats.avgRating}
+            label="Avg Facilities Rating"
+            value={`${stats.avgSatisfaction}/5`}
             accent="amber"
           />
           <StatCard
@@ -476,7 +509,7 @@ function AdminPage() {
                     <span key={l} className="stat-lang-chip">
                       {LANG_LABELS[l]}: <strong>{stats.byLang[l]}</strong>
                     </span>
-                  ) : null,
+                  ) : null
                 )}
               </span>
             }
@@ -500,7 +533,10 @@ function AdminPage() {
               </div>
               <div className="h-64 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData.overTime} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <AreaChart
+                    data={chartData.overTime}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
                     <defs>
                       <linearGradient id="colorResponses" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -508,37 +544,109 @@ function AdminPage() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "var(--color-card)",
                         borderColor: "var(--color-border)",
                         borderRadius: "8px",
                         fontSize: "12px",
-                        boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                       }}
                     />
-                    <Area type="monotone" dataKey="responses" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#colorResponses)" />
+                    <Area
+                      type="monotone"
+                      dataKey="responses"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#colorResponses)"
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* Split Grid: Ratings & Languages */}
+            {/* Split Grid: Facilities Satisfaction & Crowd Management Rating */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Rating Distribution */}
+              {/* Facilities Satisfaction (Q10) */}
               <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
                 <div className="mb-4">
-                  <h2 className="text-base font-semibold text-foreground">Rating Breakdown</h2>
-                  <p className="text-xs text-muted-foreground">Overall visitor satisfaction</p>
+                  <h2 className="text-base font-semibold text-foreground">
+                    Facilities Satisfaction (Q10)
+                  </h2>
+                  <p className="text-xs text-muted-foreground">Pilgrim feedback on facilities used</p>
                 </div>
                 <div className="h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData.ratings} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <BarChart
+                      data={chartData.satisfaction}
+                      margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
-                      <XAxis dataKey="rating" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <XAxis
+                        dataKey="rating"
+                        tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "var(--color-card)",
+                          borderColor: "var(--color-border)",
+                          borderRadius: "8px",
+                          fontSize: "12px",
+                        }}
+                      />
+                      <Bar dataKey="count" radius={[6, 6, 0, 0]} fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Crowd Management Rating (Q13) */}
+              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-base font-semibold text-foreground">
+                    Crowd Management Rating (Q13)
+                  </h2>
+                  <p className="text-xs text-muted-foreground">Evaluation of crowd control measures</p>
+                </div>
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData.crowdRating}
+                      margin={{ top: 10, right: 10, left: -25, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
+                      <XAxis
+                        dataKey="rating"
+                        tick={{ fontSize: 11, fill: "var(--color-muted-foreground)" }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "var(--color-card)",
@@ -552,63 +660,42 @@ function AdminPage() {
                   </ResponsiveContainer>
                 </div>
               </div>
-
-              {/* Language Distribution */}
-              <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-base font-semibold text-foreground">Language Distribution</h2>
-                  <p className="text-xs text-muted-foreground">Responses by selected language</p>
-                </div>
-                <div className="h-56 w-full flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={chartData.languages}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={80}
-                        paddingAngle={4}
-                        dataKey="value"
-                      >
-                        {chartData.languages.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "var(--color-card)",
-                          borderColor: "var(--color-border)",
-                          borderRadius: "8px",
-                          fontSize: "12px",
-                        }}
-                      />
-                      <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        formatter={(value) => <span className="text-xs font-medium text-foreground">{value}</span>}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
             </div>
 
-            {/* Location & Previous Kumbh Insights Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-              {/* Location / State Insights (if data exists) */}
-              {chartData.states.length > 0 && (
+            {/* Split Grid: Top Cities & Previous Kumbh */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* City Breakdown (Q3) */}
+              {chartData.cities.length > 0 && (
                 <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
                   <div className="mb-4">
-                    <h2 className="text-base font-semibold text-foreground">Top Visitor Locations</h2>
-                    <p className="text-xs text-muted-foreground">Most frequent origins reported by pilgrims</p>
+                    <h2 className="text-base font-semibold text-foreground">
+                      Top Visitor Cities (Q3)
+                    </h2>
+                    <p className="text-xs text-muted-foreground">Most common visitor origins</p>
                   </div>
                   <div className="h-56 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={chartData.states} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                      <BarChart
+                        layout="vertical"
+                        data={chartData.cities}
+                        margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
-                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        <YAxis dataKey="state" type="category" tick={{ fontSize: 12, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={100} />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                        />
+                        <YAxis
+                          dataKey="city"
+                          type="category"
+                          tick={{ fontSize: 12, fill: "var(--color-foreground)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={90}
+                        />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "var(--color-card)",
@@ -617,26 +704,45 @@ function AdminPage() {
                             fontSize: "12px",
                           }}
                         />
-                        <Bar dataKey="count" fill="#10b981" radius={[0, 6, 6, 0]} />
+                        <Bar dataKey="count" fill="#3b82f6" radius={[0, 6, 6, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
 
-              {/* Previous Kumbh Attendance Insights (if data exists) */}
+              {/* Previous Kumbh Attendance (Q4) */}
               {chartData.previousKumbh.length > 0 && (
                 <div className="rounded-xl border border-border bg-card p-5 sm:p-6 shadow-sm">
                   <div className="mb-4">
-                    <h2 className="text-base font-semibold text-foreground">Previous Kumbh Attendance</h2>
-                    <p className="text-xs text-muted-foreground">Past Kumbh Melas attended by respondents</p>
+                    <h2 className="text-base font-semibold text-foreground">
+                      Previous Kumbh Attendance (Q4)
+                    </h2>
+                    <p className="text-xs text-muted-foreground">Past Kumbh Melas attended</p>
                   </div>
                   <div className="h-56 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart layout="vertical" data={chartData.previousKumbh} margin={{ top: 5, right: 20, left: 25, bottom: 5 }}>
+                      <BarChart
+                        layout="vertical"
+                        data={chartData.previousKumbh}
+                        margin={{ top: 5, right: 20, left: 25, bottom: 5 }}
+                      >
                         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-border)" />
-                        <XAxis type="number" tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                        <YAxis dataKey="mela" type="category" tick={{ fontSize: 11, fill: "var(--color-foreground)" }} axisLine={false} tickLine={false} width={125} />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 12, fill: "var(--color-muted-foreground)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          allowDecimals={false}
+                        />
+                        <YAxis
+                          dataKey="mela"
+                          type="category"
+                          tick={{ fontSize: 11, fill: "var(--color-foreground)" }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={140}
+                        />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "var(--color-card)",
@@ -661,7 +767,7 @@ function AdminPage() {
             <Search className="admin-search-icon" />
             <input
               type="search"
-              placeholder="Search by name, phone, email, state, keyword, or 'audio'…"
+              placeholder="Search by name, phone, city, feedback, or 'audio'…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="admin-search-input"
@@ -682,24 +788,22 @@ function AdminPage() {
               type="button"
               onClick={() => setAudioOnly((prev) => !prev)}
               className={`admin-lang-btn ${audioOnly ? "active" : ""}`}
-              title="Filter responses with audio recordings"
             >
               <Mic className="h-3 w-3 inline mr-1" />
-              With Audio ({stats.withAudioCount})
+              Audio ({stats.withAudioCount})
             </button>
             <button
               type="button"
               onClick={() => setFilesOnly((prev) => !prev)}
               className={`admin-lang-btn ${filesOnly ? "active" : ""}`}
-              title="Filter responses with file attachments"
             >
               <Paperclip className="h-3 w-3 inline mr-1" />
-              With Files ({stats.withFilesCount})
+              Photos/Videos ({stats.withFilesCount})
             </button>
           </div>
         </section>
 
-        {/* ── Results label ─────────────────────────────────────────────────── */}
+        {/* ── Results Bar ──────────────────────────────────────────────────── */}
         <div className="admin-results-bar">
           <p className="admin-results-label">
             {loading
@@ -713,8 +817,8 @@ function AdminPage() {
               disabled={exporting}
               className="admin-export-inline"
             >
-              <Download className="h-3.5 w-3.5" />
-              {exporting ? "Exporting…" : "Export filtered"}
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              {exporting ? "Exporting…" : "Export filtered to Excel"}
             </button>
           )}
         </div>
@@ -781,20 +885,21 @@ function ResponseCard({
   const phoneObj = response.answers["phone"];
   const phoneText = phoneObj?.text?.trim();
 
-  const emailObj = response.answers["email"];
-  const emailText = emailObj?.text?.trim();
-
-  const stateObj = response.answers["state"];
-  const stateText = stateObj?.text?.trim();
-  const stateAudio = stateObj?.audioUrl;
-
   const cityObj = response.answers["city"];
   const cityText = cityObj?.text?.trim();
 
-  const expRating = response.answers["experience"]?.text;
+  const satRating =
+    response.answers["facilities_satisfaction"]?.text ||
+    response.answers["facilities_satisfaction"]?.choice;
+
+  const crowdRating =
+    response.answers["crowd_management_rating"]?.text ||
+    response.answers["crowd_management_rating"]?.choice;
+
   const prevKumbh =
     response.answers["previous_kumbh"]?.text?.trim() ||
     response.answers["previous_kumbh"]?.choice?.trim();
+
   const audioCount = Object.values(response.answers).filter((a) => Boolean(a.audioUrl)).length;
   const fileCount = Object.values(response.answers).reduce((acc, a) => {
     if (a.files && a.files.length > 0) return acc + a.files.length;
@@ -819,64 +924,73 @@ function ResponseCard({
             )}
 
             {phoneText ? (
-              <a
-                href={`tel:${phoneText}`}
-                onClick={(e) => e.stopPropagation()}
-                className="response-card-phone inline-flex items-center gap-1"
-                title={`Call ${phoneText}`}
-              >
-                <Phone className="h-3 w-3" />
-                <span>{phoneText}</span>
-              </a>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`tel:${phoneText}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="response-card-phone inline-flex items-center gap-1"
+                  title={`Call ${phoneText}`}
+                >
+                  <Phone className="h-3 w-3" />
+                  <span>{phoneText}</span>
+                </a>
+                <a
+                  href={`https://wa.me/91${phoneText.replace(/[^\d]/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-1 rounded-md text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                  title="WhatsApp"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </a>
+              </div>
             ) : null}
 
-            {emailText ? (
-              <a
-                href={`mailto:${emailText}`}
-                onClick={(e) => e.stopPropagation()}
-                className="response-card-phone inline-flex items-center gap-1"
-                title={`Email ${emailText}`}
-              >
-                <Mail className="h-3 w-3" />
-                <span>{emailText}</span>
-              </a>
-            ) : null}
-
-            {cityText || stateText ? (
-              <span className="response-card-state">
-                {[cityText, stateText].filter(Boolean).join(", ")}
-              </span>
-            ) : stateAudio ? (
-              <span className="response-card-state flex items-center gap-1 text-primary">
-                <Mic className="h-3 w-3" /> Audio State
+            {cityText ? (
+              <span className="response-card-state inline-flex items-center gap-1">
+                <MapPin className="h-3 w-3 text-muted-foreground" />
+                <span>{cityText}</span>
               </span>
             ) : null}
           </div>
+
           <div className="response-card-sub">
             <span className="response-lang-pill">{LANG_LABELS[response.lang]}</span>
-            {expRating && (
-              <span className="response-rating">
-                <Star className="h-3 w-3" /> {!isNaN(Number(expRating)) ? `${expRating}/5` : expRating}
+
+            {satRating && (
+              <span className="response-rating" title="Facilities Satisfaction">
+                <Star className="h-3 w-3" /> {satRating}
               </span>
             )}
+
+            {crowdRating && (
+              <span className="response-lang-pill bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                Crowd: {crowdRating}
+              </span>
+            )}
+
             {prevKumbh && (
               <span
-                className="response-lang-pill bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
+                className="response-lang-pill bg-purple-500/10 text-purple-600 border border-purple-500/20 max-w-[200px] truncate"
                 title={`Previous Kumbh: ${prevKumbh}`}
               >
-                🏛️ {prevKumbh.includes("नहीं") || prevKumbh.includes("नाही") || prevKumbh.includes("not attended") ? "First-time" : prevKumbh}
+                🏛️ {prevKumbh}
               </span>
             )}
+
             {audioCount > 0 && (
               <span className="response-audio-badge">
                 <Mic className="h-3 w-3" /> {audioCount} audio
               </span>
             )}
+
             {fileCount > 0 && (
               <span className="response-audio-badge text-blue-600 bg-blue-500/10 border-blue-500/20">
-                <Paperclip className="h-3 w-3" /> {fileCount} file{fileCount > 1 ? "s" : ""}
+                <Film className="h-3 w-3" /> {fileCount} file{fileCount > 1 ? "s" : ""}
               </span>
             )}
+
             <span className="response-date">
               {new Date(response.submittedAt).toLocaleString("en-IN", {
                 dateStyle: "medium",
@@ -894,9 +1008,9 @@ function ResponseCard({
       {expanded && (
         <div className="response-answers">
           <dl className="response-answer-grid">
-            {QUESTIONS.map((q) => {
+            {QUESTIONS.map((q, idx) => {
               const a = response.answers[q.id];
-              const hasText = Boolean(a?.text?.trim());
+              const hasText = Boolean(a?.text?.trim() || a?.choice?.trim());
               const hasAudio = Boolean(a?.audioUrl);
               const allFiles =
                 a?.files && a.files.length > 0
@@ -905,16 +1019,22 @@ function ResponseCard({
                   ? [{ fileUrl: a.fileUrl, fileName: a.fileName, fileType: a.fileType, fileSize: undefined }]
                   : [];
               const hasFile = allFiles.length > 0;
+              const section = SECTIONS[q.section];
 
               if (!a && !hasAudio && !hasFile) return null;
 
               return (
                 <div key={q.id} className="answer-item">
                   <div className="answer-header-row">
-                    <dt className="answer-question">{q.label.en}</dt>
+                    <dt className="answer-question">
+                      <span className="text-[11px] font-bold text-primary mr-1.5">
+                        [{section.letter}{idx + 1}]
+                      </span>
+                      {q.label.en}
+                    </dt>
                     {hasFile ? (
                       <span className="answer-type-tag bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center gap-1">
-                        <Paperclip className="h-2.5 w-2.5" /> {allFiles.length > 1 ? `${allFiles.length} Files` : "File"}
+                        <Paperclip className="h-2.5 w-2.5" /> {allFiles.length > 1 ? `${allFiles.length} Media` : "Media"}
                       </span>
                     ) : hasAudio ? (
                       <span className="answer-type-tag answer-type-audio flex items-center gap-1">
@@ -925,18 +1045,18 @@ function ResponseCard({
                         Checkboxes
                       </span>
                     ) : q.type === "choice" ? (
-                      <span className="answer-type-tag answer-type-choice">Option</span>
+                      <span className="answer-type-tag answer-type-choice">Single Choice</span>
                     ) : null}
                   </div>
+
                   <dd className="answer-body">
-                    {/* Render text if present */}
                     {hasText && (
-                      <span className="answer-text">{a!.text}</span>
+                      <span className="answer-text whitespace-pre-line">{a!.text || a!.choice}</span>
                     )}
 
-                    {/* Render file attachments if present */}
+                    {/* Media files preview */}
                     {hasFile && (
-                      <div className="mt-2 space-y-2">
+                      <div className="mt-2.5 space-y-2">
                         {allFiles.map((fileItem, fIdx) => (
                           <div
                             key={fIdx}
@@ -949,27 +1069,27 @@ function ResponseCard({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="shrink-0 group relative"
-                                title="Open full image"
+                                title="Open full photo"
                               >
                                 <img
                                   src={fileItem.fileUrl}
-                                  alt={fileItem.fileName || "Uploaded attachment"}
-                                  className="h-14 w-14 rounded object-cover border border-border transition-transform group-hover:scale-105"
+                                  alt={fileItem.fileName || "Uploaded photo"}
+                                  className="h-14 w-14 rounded-lg object-cover border border-border transition-transform group-hover:scale-105"
                                 />
                               </a>
                             ) : fileItem.fileType?.startsWith("video/") ||
                               fileItem.fileUrl?.match(/\.(mp4|webm|mov|ogg)/i) ? (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
                                 <Film className="h-6 w-6" />
                               </div>
                             ) : (
-                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                                 <Paperclip className="h-6 w-6" />
                               </div>
                             )}
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-medium text-foreground truncate">
-                                {fileItem.fileName || "Attachment"}
+                              <p className="text-xs font-semibold text-foreground truncate">
+                                {fileItem.fileName || "Media attachment"}
                               </p>
                               <a
                                 href={fileItem.fileUrl}
@@ -977,7 +1097,7 @@ function ResponseCard({
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline mt-0.5"
                               >
-                                <span>Open file</span>
+                                <span>Open full media</span>
                                 <ExternalLink className="h-3 w-3" />
                               </a>
                             </div>
@@ -986,7 +1106,7 @@ function ResponseCard({
                       </div>
                     )}
 
-                    {/* Render audio player if audio was submitted */}
+                    {/* Audio recording player */}
                     {hasAudio && (
                       <div className="answer-audio-row">
                         <audio controls src={a!.audioUrl} className="answer-audio-player" />
@@ -995,14 +1115,13 @@ function ResponseCard({
                           target="_blank"
                           rel="noopener noreferrer"
                           className="answer-audio-link"
-                          title="Open audio file in new tab"
+                          title="Open audio in new tab"
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </div>
                     )}
 
-                    {/* Only show '—' if neither text, audio, nor file is present */}
                     {!hasText && !hasAudio && !hasFile && (
                       <span className="answer-empty">—</span>
                     )}
