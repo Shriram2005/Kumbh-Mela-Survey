@@ -1,116 +1,130 @@
-# Kumbh Mela Visitor Survey
+# 🕉️ Kumbh Mela Visitor Survey
 
-> A lightweight, multilingual visitor survey application built with TanStack Start, React, and Tailwind CSS. Designed to collect pilgrim feedback with both text and voice capabilities in English, Hindi, and Marathi.
+ A modern, multilingual digital survey application designed to collect and analyze pilgrim feedback for the Kumbh Mela — capturing visitor experiences to improve infrastructure, crowd management, and facilities.
 
 ---
 
-## ✨ Features
+## ✨ Key Features
 
-- **🌐 Multilingual Support**: Fully localized in 3 languages:
-  - English (`en-IN`)
-  - Hindi (`hi-IN` · हिन्दी)
-  - Marathi (`mr-IN` · मराठी)
-- **🎙️ Voice & Audio Input**:
-  - **Speech-to-Text**: Real-time voice typing powered by the Web Speech API.
-  - **Audio Recording**: Record voice responses directly in the browser via `MediaRecorder`.
-- **📋 Guided Questionnaire**: Step-by-step survey flow with progress tracking, rating scales, multiple-choice options, and open feedback fields covering crowd management, medical care, safety, sanitation, and travel.
-- **📊 Admin Dashboard (`/admin`)**: Built-in review dashboard to browse submitted responses and play back recorded audio answers.
-- **💾 Local Persistence**: Client-side storage for responses via `localStorage`, enabling instant review and offline-friendly data collection.
+### Pilgrim Survey (`/`)
+- 🌐 **Multilingual Support**: Fully translated in **English**, **हिन्दी (Hindi)**, and **मराठी (Marathi)**.
+- 🎙️ **Voice Typing & Audio Recording**: Integrated Web Speech recognition for voice dictation and in-browser audio recording (Opus/WebM).
+- 📸 **Media Uploads**: Pilgrims can share experience photos and videos (with client-side image compression, up to 10MB).
+- 💾 **Offline Draft Resilience**: Automatically saves progress in IndexedDB; visitors can close and resume without losing answers.
+- 📍 **GPS & Quick City Selection**: Auto-detect city via geolocation or pick from quick-select pilgrimage chips.
+- 📱 **Mobile-First Experience**: Optimized for smartphones with compact option layouts, WCAG-compliant touch targets (`min-h-[48px]`), smooth auto-scroll, and collapsible history.
+- 🔒 **Duplicate Prevention**: Prevents repeat submissions on the same device.
+
+### Admin Dashboard (`/admin`)
+- 📊 **Real-Time KPIs**: Total responses, facility satisfaction, audio counts, and media attachments.
+- 📈 **Interactive Visualizations**: Charts powered by Recharts (submission trends, ratings, language breakdown, top origin cities, past attendance).
+- 🔍 **Search & Filters**: Filter by language, audio-only, media-only, or text search across responses.
+- 📥 **Excel Export**: 1-click formatted `.xlsx` export containing all 21 questions and S3 media links.
+
+---
+
+## 📋 Questionnaire Structure
+
+Structured into **21 questions across 5 sections** based on the research framework by K K Wagh MCA:
+
+| Section | Focus Area | Questions |
+|:---|:---|:---|
+| **Section A** | **Visitor Background & Visit Details** | Name, 10-digit Phone, City, Past Kumbh attended, Companions, Group size, Primary purpose, Transport mode |
+| **Section B** | **Facilities & Visitor Experience** | Facilities used, Satisfaction rating, Major challenges faced |
+| **Section C** | **Crowd Management & Technology** | Duration of stay (Hours/Days/Months), Crowd rating, Tech systems observed, Tech issues faced, Desired tech features |
+| **Section D** | **Information & Infrastructure** | Primary info source, Electricity & internet connectivity rating |
+| **Section E** | **Impact & Future Improvements** | Overall visit impact, Photo/Video upload *(optional)*, Tech improvement suggestions *(optional)* |
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [TanStack Start](https://tanstack.com/start) & [React 19](https://react.dev)
-- **Routing**: [TanStack Router](https://tanstack.com/router) (file-based routing)
-- **Language**: TypeScript
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com) & [Radix UI](https://www.radix-ui.com)
-- **Icons**: [Lucide React](https://lucide.dev)
-- **Build Tool**: [Vite](https://vite.dev)
+- **Framework**: [TanStack Start](https://tanstack.com/start) (React 19 + Vite)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
+- **Database**: [Firebase Firestore](https://firebase.google.com/)
+- **Media Storage**: [AWS S3](https://aws.amazon.com/s3/) (Mumbai `ap-south-1`)
+- **Analytics & Charts**: [Recharts](https://recharts.org/)
+- **Export**: [SheetJS (xlsx)](https://sheetjs.com/)
+- **Media Tools**: Web Speech API, MediaRecorder API, `browser-image-compression`
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
+### 1. Prerequisites
+- Node.js 18+
+- npm or pnpm
 
-Ensure you have [Node.js](https://nodejs.org/) (v20+) or [Bun](https://bun.sh/) installed.
-
-### Installation
-
-Clone the repository and install dependencies:
-
+### 2. Installation
 ```bash
-# Using npm
+# Clone repository
+git clone https://github.com/Shriram2005/Kumbh-Mela-Survey.git
+cd Kumbh-Mela-Survey
+
+# Install dependencies
 npm install
-
-# Or using bun
-bun install
 ```
 
-### Environment Configuration
+### 3. Environment Variables
+Create a `.env` file in the root directory (refer to `.env.example`):
 
-Copy the sample environment file and configure your credentials:
+```env
+# Firebase Configuration
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 
-```bash
-cp .env.example .env
+# AWS S3 (Audio and Media Storage)
+VITE_AWS_REGION=ap-south-1
+VITE_AWS_ACCESS_KEY_ID=your_access_key
+VITE_AWS_SECRET_ACCESS_KEY=your_secret_key
+VITE_AWS_S3_BUCKET=your_bucket_name
 ```
+> *Note: If cloud credentials are not supplied, the app gracefully falls back to local storage.*
 
-Configure your credentials in `.env`:
-- **Firebase**: For storing survey responses in Firestore
-- **AWS S3**: For uploading recorded audio answers and media attachments
-
-
-### Running Locally
-
-Start the local development server:
-
+### 4. Run Development Server
 ```bash
 npm run dev
-# or
-bun dev
+```
+Open **http://localhost:8080** to view the survey or **http://localhost:8080/admin** for the admin dashboard.
+
+### 5. Build for Production
+```bash
+npm run build
+npm run preview
 ```
 
-Open your browser and navigate to:
-- **Survey App**: [http://localhost:3000](http://localhost:3000) (or the port indicated in your terminal)
-- **Admin View**: [http://localhost:3000/admin](http://localhost:3000/admin)
-
 ---
 
-## 📜 Available Scripts
+## 📂 Project Structure
 
-| Script | Command | Description |
-| --- | --- | --- |
-| Development | `npm run dev` | Starts Vite dev server with hot reload |
-| Production Build | `npm run build` | Compiles the project for production |
-| Preview | `npm run preview` | Previews the production build locally |
-| Lint | `npm run lint` | Runs ESLint to identify code issues |
-| Format | `npm run format` | Formats source files with Prettier |
-
----
-
-## 📁 Project Structure
-
-```text
+```
 kumbha-mela-survey/
-├── public/              # Static assets and icons
 ├── src/
-│   ├── components/      # UI components (VoiceInput, Radix UI components)
+│   ├── routes/
+│   │   ├── __root.tsx        # App shell and root layout
+│   │   ├── index.tsx         # Mobile-first 21-question survey flow
+│   │   └── admin.tsx         # Analytics dashboard & Excel export
+│   ├── components/
+│   │   ├── VoiceInput.tsx    # Speech-to-text and audio recorder
+│   │   └── ui/               # Radix UI + Tailwind design components
 │   ├── lib/
-│   │   └── survey.ts    # Survey schema, questions, translations, storage helpers
-│   ├── routes/          # TanStack Start file-based routes
-│   │   ├── __root.tsx   # Root application layout
-│   │   ├── index.tsx    # Visitor survey questionnaire (/)
-│   │   └── admin.tsx    # Admin response viewer (/admin)
-│   ├── router.tsx       # Router configuration
-│   └── styles.css       # Tailwind CSS and global styling
+│   │   ├── survey.ts         # Question schemas, translations (EN/HI/MR)
+│   │   ├── firebase.ts       # Firestore database initialization
+│   │   ├── s3.ts             # AWS S3 direct upload handler
+│   │   └── draft.ts          # IndexedDB draft auto-save
+│   └── styles.css            # Global styling & custom themes
+├── public/                   # Static assets
 ├── package.json
 └── vite.config.ts
 ```
 
 ---
 
-## 🎙️ Browser Capabilities & Permissions
+## 📄 License
 
-- **Voice Typing**: Utilizes the Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`). Best supported on Chromium-based browsers (Chrome, Edge, Brave).
-- **Audio Recording**: Uses the HTML5 `MediaRecorder` API. Requires granting microphone access when prompted by the browser.
+This project is developed for research and public service planning for Kumbh Mela events.
