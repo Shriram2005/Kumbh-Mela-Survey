@@ -585,7 +585,7 @@ function SurveyPage() {
   // ─── Submitted View ──────────────────────────────────────────────────────────
   if (submitted) {
     return (
-      <Shell>
+      <Shell hideHeader>
         <div className="text-center py-8 animate-in fade-in zoom-in duration-500">
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 text-primary mb-6 shadow-sm">
             <Check className="h-10 w-10 stroke-[2.5]" />
@@ -617,11 +617,8 @@ function SurveyPage() {
     return (
       <Shell>
         <div className="text-center mb-6 sm:mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
-            <span>K K Wagh MCA · Research Questionnaire</span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground leading-tight">
-            Kumbh Mela – Experience and Suggestions Form
+            Kumbh Mela – Pilgrim Experience and Suggestions Form
           </h1>
           <p className="mt-2 text-base text-muted-foreground font-medium">
             कुंभ मेला – अनुभव एवं सुझाव फ़ॉर्म
@@ -667,7 +664,7 @@ function SurveyPage() {
       en: {
         institution: "K K Wagh Institute of Engineering Education and Research, Nashik",
         dept: "Department of MCA",
-        title: "Kumbh Mela – Experience and Suggestions Form",
+        title: "Kumbh Mela – Pilgrim Experience and Suggestions Form",
         greeting: "Dear Sir/Madam,",
         body: "If you have previously experienced the Kumbh Mela, kindly fill out this Form.",
         bullets: [
@@ -1739,10 +1736,50 @@ function CityInput({
   );
 }
 
-// ─── Outer Shell ─────────────────────────────────────────────────────────────
-function Shell({ children }: { children: React.ReactNode }) {
+// ─── Institutional Header ───────────────────────────────────────────────────
+function Header() {
   return (
-    <main className="min-h-[100dvh] survey-form-shell px-3 sm:px-4 py-4 sm:py-10 pb-6 sm:pb-12 flex flex-col justify-between overflow-x-hidden">
+    <header className="w-full max-w-2xl mx-auto mb-3 sm:mb-5 rounded-2xl bg-white/90 dark:bg-card/90 backdrop-blur-md border border-white/80 dark:border-border/70 shadow-sm px-3.5 py-3 sm:px-5 sm:py-3.5 transition-all">
+      <div className="flex items-center justify-between gap-2.5 sm:gap-4">
+        {/* Left: KKW Logo */}
+        <div className="flex items-center justify-start shrink-0">
+          <img
+            src="/kkwlogo.png"
+            alt="K K Wagh Logo"
+            className="h-12 sm:h-14 md:h-16 w-auto object-contain max-w-[68px] sm:max-w-[88px]"
+          />
+        </div>
+
+        {/* Center: KKW Name */}
+        <div className="flex-1 min-w-0 text-center px-1 sm:px-2">
+          <h1 className="text-xs sm:text-sm md:text-base font-bold text-foreground tracking-tight leading-snug sm:leading-tight">
+            K K Wagh Institute of Engineering Education and Research, Nashik
+          </h1>
+        </div>
+
+        {/* Right: Golden Jubilee Logo */}
+        <div className="flex items-center justify-end shrink-0">
+          <img
+            src="/golden_jubilee.png"
+            alt="Golden Jubilee Logo"
+            className="h-10 sm:h-12 md:h-14 w-auto object-contain max-w-[55px] sm:max-w-[70px] mix-blend-multiply dark:mix-blend-normal"
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ─── Outer Shell ─────────────────────────────────────────────────────────────
+function Shell({
+  children,
+  hideHeader = false,
+}: {
+  children: React.ReactNode;
+  hideHeader?: boolean;
+}) {
+  return (
+    <main className="min-h-[100dvh] survey-form-shell px-3 sm:px-4 py-3 sm:py-6 pb-6 sm:pb-12 flex flex-col justify-between overflow-x-hidden">
       <Toaster
         position="bottom-center"
         toastOptions={{
@@ -1753,10 +1790,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           },
         }}
       />
+      {!hideHeader && <Header />}
       <div className="mx-auto w-full max-w-2xl survey-glass-panel flex-1">{children}</div>
       <footer className="mt-6 sm:mt-8 text-center space-y-1 px-2">
-        <p className="text-xs text-muted-foreground text-foreground/80">
-          KKWIEER – MCA
+        <p className="text-xs text-muted-foreground">
+          Copyright © 2026 Department of MCA, K. K. Wagh Institute of Engineering Education and Research, Nashik.
         </p>
         <p className="text-[11px] text-muted-foreground">
           Kumbh Mela Research & Visitor Experience Survey

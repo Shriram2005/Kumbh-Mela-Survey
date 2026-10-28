@@ -79,7 +79,7 @@ export const SECTIONS: Record<"A" | "B" | "C" | "D" | "E", SectionMeta> = {
 export const UI = {
   en: {
     institution: "K K Wagh Institute of Engineering Education and Research, Nashik\nDepartment of MCA",
-    title: "Kumbh Mela – Experience and Suggestions Form",
+    title: "Kumbh Mela – Pilgrim Experience and Suggestions Form",
     subtitle: "कुंभ मेला - अनुभव एवं सुझाव फ़ॉर्म",
     chooseLang: "Choose your language",
     start: "Start survey",
