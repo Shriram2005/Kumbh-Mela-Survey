@@ -1779,7 +1779,8 @@ function Shell({
   hideHeader?: boolean;
 }) {
   return (
-    <main className="min-h-[100dvh] survey-form-shell px-3 sm:px-4 py-3 sm:py-6 pb-6 sm:pb-12 flex flex-col justify-between overflow-x-hidden">
+    <main className="min-h-[100dvh] survey-form-shell px-3 sm:px-4 py-3 sm:py-6 pb-6 sm:pb-12 flex flex-col justify-between overflow-x-hidden relative">
+      <div className="survey-fixed-bg" aria-hidden="true" />
       <Toaster
         position="bottom-center"
         toastOptions={{
