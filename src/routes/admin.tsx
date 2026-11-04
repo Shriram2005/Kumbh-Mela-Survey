@@ -170,18 +170,33 @@ function AdminPage() {
     );
 
     const SATISFACTION_SCORES: Record<string, number> = {
+      // 5 - Very Satisfied
       "Very Satisfied": 5, "बहुत संतुष्ट": 5, "खूप समाधानी": 5,
+      // 4 - Satisfied
       "Satisfied": 4, "संतुष्ट": 4, "समाधानी": 4,
-      "Neutral": 3, "तटस्थ": 3,
-      "Dissatisfied": 2, "असंतोषजनक": 2, "असमाधानी": 2,
-      "Very Dissatisfied": 1, "बहुत असंतोषजनक": 1, "खूप असमाधानी": 1,
+      // 3 - Neutral
+      "Neutral": 3, "तटस्थ": 3, "ठीक-ठाक / सामान्य (Neutral)": 3, "ठीक-ठाक / मध्यम (Neutral)": 3,
+      // 2 - Dissatisfied
+      "Dissatisfied": 2, "असंतोषजनक": 2, "असंतोषजनक / खराब": 2, "असमाधानी": 2,
+      // 1 - Very Dissatisfied
+      "Very Dissatisfied": 1, "बहुत असंतोषजनक": 1, "बहुत असंतोषजनक / बहुत खराब": 1, "खूप असमाधानी": 1,
+    };
+
+    const getSatisfactionScore = (val: string): number | null => {
+      if (SATISFACTION_SCORES[val] !== undefined) return SATISFACTION_SCORES[val];
+      if (val.includes("Very Satisfied") || val.includes("बहुत संतुष्ट") || val.includes("खूप समाधानी")) return 5;
+      if (val.includes("Satisfied") || val.includes("संतुष्ट") || val.includes("समाधानी")) return 4;
+      if (val.includes("Neutral") || val.includes("तटस्थ") || val.includes("ठीक-ठाक") || val.includes("मध्यम")) return 3;
+      if (val.includes("Very Dissatisfied") || val.includes("बहुत असंतोषजनक") || val.includes("खूप असमाधानी") || val.includes("बहुत खराब") || val.includes("खूप वाईट")) return 1;
+      if (val.includes("Dissatisfied") || val.includes("असंतोषजनक") || val.includes("असमाधानी") || val.includes("खराब") || val.includes("वाईट")) return 2;
+      return null;
     };
 
     const satScores = responses
       .map((r) => {
         const val = r.answers["facilities_satisfaction"]?.text || r.answers["facilities_satisfaction"]?.choice;
         if (!val) return null;
-        return SATISFACTION_SCORES[val] ?? null;
+        return getSatisfactionScore(val);
       })
       .filter((n): n is number => n !== null);
 
@@ -273,11 +288,11 @@ function AdminPage() {
         satCounts["Very Satisfied"] = (satCounts["Very Satisfied"] ?? 0) + 1;
       } else if (val.includes("Satisfied") || val.includes("संतुष्ट") || val.includes("समाधानी")) {
         satCounts["Satisfied"] = (satCounts["Satisfied"] ?? 0) + 1;
-      } else if (val.includes("Neutral") || val.includes("तटस्थ")) {
+      } else if (val.includes("Neutral") || val.includes("तटस्थ") || val.includes("ठीक-ठाक") || val.includes("मध्यम")) {
         satCounts["Neutral"] = (satCounts["Neutral"] ?? 0) + 1;
-      } else if (val.includes("Very Dissatisfied") || val.includes("बहुत असंतोषजनक") || val.includes("खूप असमाधानी")) {
+      } else if (val.includes("Very Dissatisfied") || val.includes("बहुत असंतोषजनक") || val.includes("खूप असमाधानी") || val.includes("बहुत खराब") || val.includes("खूप वाईट")) {
         satCounts["Very Dissatisfied"] = (satCounts["Very Dissatisfied"] ?? 0) + 1;
-      } else if (val.includes("Dissatisfied") || val.includes("असंतोषजनक") || val.includes("असमाधानी")) {
+      } else if (val.includes("Dissatisfied") || val.includes("असंतोषजनक") || val.includes("असमाधानी") || val.includes("खराब") || val.includes("वाईट")) {
         satCounts["Dissatisfied"] = (satCounts["Dissatisfied"] ?? 0) + 1;
       }
     });
@@ -301,9 +316,9 @@ function AdminPage() {
       if (!val) return;
       if (val.includes("Excellent") || val.includes("उत्कृष्ट")) {
         crowdCounts["Excellent"] = (crowdCounts["Excellent"] ?? 0) + 1;
-      } else if (val.includes("Good") || val.includes("अच्छा") || val.includes("चांगले")) {
+      } else if (val.includes("Good") || val.includes("अच्छा") || val.includes("अच्छी") || val.includes("चांगले")) {
         crowdCounts["Good"] = (crowdCounts["Good"] ?? 0) + 1;
-      } else if (val.includes("Fair") || val.includes("सामान्य") || val.includes("साधारण")) {
+      } else if (val.includes("Fair") || val.includes("सामान्य") || val.includes("साधारण") || val.includes("ठीक-ठाक")) {
         crowdCounts["Fair"] = (crowdCounts["Fair"] ?? 0) + 1;
       } else if (val.includes("Very Poor") || val.includes("बहुत खराब") || val.includes("खूप वाईट")) {
         crowdCounts["Very Poor"] = (crowdCounts["Very Poor"] ?? 0) + 1;
@@ -435,14 +450,21 @@ function AdminPage() {
       <header className="admin-header">
         <div className="admin-header-inner">
           <div className="admin-header-title-group">
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="admin-title">Kumbh Mela Survey Admin</h1>
-                <span className="admin-badge">K K Wagh MCA</span>
+            <div className="flex items-center gap-3">
+              <img
+                src="/kkwlogo.png"
+                alt="K K Wagh Logo"
+                className="h-9 sm:h-10 w-auto object-contain shrink-0"
+              />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="admin-title">Kumbh Mela Survey Admin</h1>
+                  <span className="admin-badge">K K Wagh MCA</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Pilgrim Experience & Suggestions Questionnaire Analytics
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Visitor Experience & Technology Questionnaire Analytics
-              </p>
             </div>
           </div>
           <div className="admin-header-actions">
@@ -1031,6 +1053,11 @@ function ResponseCard({
                         [{section.letter}{idx + 1}]
                       </span>
                       {q.label.en}
+                      {response.lang !== "en" && q.label[response.lang] && (
+                        <span className="block text-xs font-normal text-muted-foreground mt-0.5">
+                          {q.label[response.lang]}
+                        </span>
+                      )}
                     </dt>
                     {hasFile ? (
                       <span className="answer-type-tag bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center gap-1">
